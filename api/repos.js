@@ -1,10 +1,12 @@
 const normalize = (s) => (s || "").toLowerCase();
 
 function extractGroups(readme) {
-    const match = readme.match(/gud-repo-groups:\s*([\s\S]*?)-->/i);
-    if (!match) return null;
+    const start = readme.indexOf("gud-repo-groups:");
+    const end = readme.indexOf("-->", start);
 
-    const block = match[1];
+    if (start === -1 || end === -1) return null;
+
+    const block = readme.slice(start, end);
 
     const groups = {};
 
@@ -89,7 +91,7 @@ module.exports = async (req, res) => {
         const grouped = {};
         const used = new Set();
 
-        console.log("GROUPS:" + groupsConfig);
+        console.log("GROUPS:", groupsConfig);
         if (groupsConfig) {
             for (const [groupName, repoList] of Object.entries(groupsConfig)) {
                 grouped[groupName] = [];

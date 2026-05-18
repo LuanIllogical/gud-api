@@ -66,16 +66,24 @@ module.exports = async (req, res) => {
 
         let groupsConfig = null;
 
-        try {
-            const readmeRes = await fetch(
-                `https://raw.githubusercontent.com/${user}/${user}/main/README.md`
+        const branches = ["master", "main"];
+
+        let readme = null;
+
+        for (const branch of branches) {
+            const res = await fetch(
+                `https://raw.githubusercontent.com/${user}/${user}/${branch}/README.md`
             );
 
-            if (readmeRes.ok) {
-                const readme = await readmeRes.text();
-                groupsConfig = extractGroups(readme);
+            if (res.ok) {
+                readme = await res.text();
+                break;
             }
-        } catch (e) { }
+        }
+
+        if (readme) {
+            groupsConfig = extractGroups(readme);
+        }
 
         const repoMap = new Map(
             repos.map(r => [
@@ -91,7 +99,6 @@ module.exports = async (req, res) => {
         const grouped = {};
         const used = new Set();
 
-        console.log("GROUPS:", groupsConfig);
         if (groupsConfig) {
             for (const [groupName, repoList] of Object.entries(groupsConfig)) {
                 grouped[groupName] = [];

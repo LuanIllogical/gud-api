@@ -89,6 +89,7 @@ module.exports = async (req, res) => {
         const grouped = {};
         const used = new Set();
 
+        console.log("GROUPS:" + groupsConfig);
         if (groupsConfig) {
             for (const [groupName, repoList] of Object.entries(groupsConfig)) {
                 grouped[groupName] = [];

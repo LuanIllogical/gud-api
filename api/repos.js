@@ -85,17 +85,6 @@ module.exports = async (req, res) => {
             groupsConfig = extractGroups(readme);
         }
 
-        const repoMap = new Map(
-            repos.map(r => [
-                r.name,
-                {
-                    name: r.name,
-                    html_url: r.html_url,
-                    description: r.description
-                }
-            ])
-        );
-
         const grouped = {};
         const used = new Set();
 
@@ -117,12 +106,7 @@ module.exports = async (req, res) => {
         }
 
         const other = repos
-            .filter(r => !used.has(r.name))
-            .map(r => ({
-                name: r.name,
-                html_url: r.html_url,
-                description: r.description
-            }));
+            .filter(r => !used.has(r.name));
 
         return res.status(200).json({ grouped, other });
 

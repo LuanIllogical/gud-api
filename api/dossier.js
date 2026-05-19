@@ -1,3 +1,15 @@
+const { marked } = require("marked");
+const createDOMPurify = require("dompurify");
+const { JSDOM } = require("jsdom");
+
+const window = new JSDOM("").window;
+const DOMPurify = createDOMPurify(window);
+
+marked.setOptions({
+    mangle: false,
+    headerIds: false
+});
+
 const normalize = (s) => (s || "").toLowerCase();
 
 function extractGroups(readme) {
@@ -87,6 +99,7 @@ module.exports = async (req, res) => {
         }
 
         let readme = null;
+        let readmeHTML = null;
 
         const branches = ["main", "master"];
 
@@ -105,6 +118,10 @@ module.exports = async (req, res) => {
 
         if (readme) {
             groupsConfig = extractGroups(readme);
+        }
+        if (readme) {
+            const rawHTML = marked.parse(readme);
+            readmeHTML = DOMPurify.sanitize(rawHTML);
         }
 
         const grouped = {};
@@ -131,7 +148,7 @@ module.exports = async (req, res) => {
 
         return res.status(200).json({
             user: userData,
-            readme,
+            readme: readmeHTML,
             repos: {
                 grouped,
                 other

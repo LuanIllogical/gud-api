@@ -34,7 +34,7 @@ function extractGroups(readme) {
 
 module.exports = async (req, res) => {
     try {
-        res.setHeader("Access-Control-Allow-Origin", "*"); //https://luanillogical.github.io
+        res.setHeader("Access-Control-Allow-Origin", "*");
         res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
         res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
@@ -46,6 +46,25 @@ module.exports = async (req, res) => {
 
         if (!user) {
             return res.status(400).json({ error: "Missing user" });
+        }
+
+        const userRes = await fetch(
+            `https://api.github.com/users/${user}`,
+            {
+                headers: {
+                    Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+                    "User-Agent": "repo-viewer"
+                }
+            }
+        );
+
+        const userData = await userRes.json();
+
+        if (!userRes.ok) {
+            return res.status(500).json({
+                error: "Failed to fetch user",
+                debug: userData
+            });
         }
 
         const repoRes = await fetch(
@@ -61,25 +80,28 @@ module.exports = async (req, res) => {
         const repos = await repoRes.json();
 
         if (!Array.isArray(repos)) {
-            return res.status(500).json({ error: "GitHub API error", debug: repos });
+            return res.status(500).json({
+                error: "GitHub API error",
+                debug: repos
+            });
         }
-
-        let groupsConfig = null;
-
-        const branches = ["master", "main"];
 
         let readme = null;
 
+        const branches = ["main", "master"];
+
         for (const branch of branches) {
-            const res = await fetch(
+            const resReadme = await fetch(
                 `https://raw.githubusercontent.com/${user}/${user}/${branch}/README.md`
             );
 
-            if (res.ok) {
-                readme = await res.text();
+            if (resReadme.ok) {
+                readme = await resReadme.text();
                 break;
             }
         }
+
+        let groupsConfig = null;
 
         if (readme) {
             groupsConfig = extractGroups(readme);
@@ -105,10 +127,16 @@ module.exports = async (req, res) => {
             }
         }
 
-        const other = repos
-            .filter(r => !used.has(r.name));
+        const other = repos.filter(r => !used.has(r.name));
 
-        return res.status(200).json({ grouped, other });
+        return res.status(200).json({
+            user: userData,
+            readme,
+            repos: {
+                grouped,
+                other
+            }
+        });
 
     } catch (err) {
         return res.status(500).json({

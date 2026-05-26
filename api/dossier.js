@@ -131,9 +131,14 @@ module.exports = async (req, res) => {
 
         let groupsConfig = null;
 
+        let readmeHTML = null;
+        let languageTexts = {};
+        let sanitizedHTML = '';
+
         if (readme) {
             groupsConfig = extractGroups(readme);
             const extracted = extractLanguageSections(readme);
+            languageTexts = extracted.languageTexts;  // Store this
 
             // Process the clean README (with markers removed)
             const { marked } = await import('marked');
@@ -150,7 +155,7 @@ module.exports = async (req, res) => {
 
             // Get the full HTML structure (without any markers)
             const fullHTML = await marked.parse(extracted.cleanReadme);
-            const sanitizedHTML = DOMPurify.sanitize(fullHTML);
+            sanitizedHTML = DOMPurify.sanitize(fullHTML);
         }
 
         const grouped = {};
@@ -177,9 +182,12 @@ module.exports = async (req, res) => {
 
         return res.status(200).json({
             user: userData,
-            readme: sanitizedHTML,  // Complete HTML structure
-            languageTexts: extracted.languageTexts,  // Raw text for each language
-            repos: { grouped, other }
+            readme: sanitizedHTML,  // Use sanitizedHTML here
+            languageTexts: languageTexts,  // Send languageTexts (not languageSections)
+            repos: {
+                grouped,
+                other
+            }
         });
 
     } catch (err) {

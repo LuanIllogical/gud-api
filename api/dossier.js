@@ -113,7 +113,6 @@ module.exports = async (req, res) => {
         }
 
         let readme = null;
-        let readmeHTML = null;
         let languageSections = {};
 
         const branches = ["main", "master"];
@@ -129,9 +128,6 @@ module.exports = async (req, res) => {
             }
         }
 
-        let groupsConfig = null;
-
-        let readmeHTML = null;
         let languageTexts = {};
         let sanitizedHTML = '';
 
@@ -158,6 +154,7 @@ module.exports = async (req, res) => {
             sanitizedHTML = DOMPurify.sanitize(fullHTML);
         }
 
+        let groupsConfig = null;
         const grouped = {};
         const used = new Set();
 

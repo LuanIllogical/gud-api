@@ -5,61 +5,20 @@ function parseGudConfig(readme) {
 
     if (!readme) return config;
 
-    const start = readme.indexOf("<!--");
-    const end = readme.indexOf("-->", start);
+    const gudBlockMatch = readme.match(/<!--\s*([\s\S]*?)\s*-->/);
+    if (!gudBlockMatch) return config;
 
-    if (start === -1 || end === -1) return config;
+    const block = gudBlockMatch[1];
 
-    const block = readme.slice(start + 4, end);
+    const sections = block.split(/\n(?=gud-)/);
 
-    const lines = block.split("\n");
-    let currentKey = null;
-    let currentValue = [];
-    let inBrace = false;
-
-    for (let line of lines) {
-        line = line.trim();
-        if (!line) continue;
-
-        const keyMatch = line.match(/^gud-([a-z-]+):\s*{?/);
-        if (keyMatch) {
-            if (currentKey && currentValue.length > 0) {
-                config[currentKey] = currentValue.join('\n').trim();
-                currentValue = [];
-            }
-
-            currentKey = keyMatch[1];
-            const hasOpeningBrace = line.includes('{');
-            const afterColon = line.replace(/^gud-[a-z-]+:\s*{?\s*/, '');
-
-            if (hasOpeningBrace) {
-                inBrace = true;
-                if (afterColon && afterColon !== '{') {
-                    currentValue.push(afterColon);
-                }
-            } else {
-                inBrace = false;
-                if (afterColon) {
-                    currentValue.push(afterColon);
-                }
-            }
-            continue;
+    for (const section of sections) {
+        const match = section.match(/^gud-([a-z-]+):\s*{\s*([\s\S]*?)\s*}\s*$/);
+        if (match) {
+            const key = match[1];
+            let value = match[2].trim();
+            config[key] = value;
         }
-
-        if (inBrace && currentKey) {
-            const hasClosingBrace = line.includes('}');
-            const cleanedLine = line.replace(/}$/, '');
-            if (cleanedLine) {
-                currentValue.push(cleanedLine);
-            }
-            if (hasClosingBrace) {
-                inBrace = false;
-            }
-        }
-    }
-
-    if (currentKey && currentValue.length > 0) {
-        config[currentKey] = currentValue.join('\n').trim();
     }
 
     return config;
@@ -96,7 +55,7 @@ function extractGroupsFromConfig(groupsConfig) {
 
 function extractBackgroundFromConfig(backgroundConfig) {
     if (!backgroundConfig) return null;
-    return backgroundConfig.trim();
+    return backgroundConfig.replace(/\s+/g, ' ').trim();
 }
 
 function extractLanguageSections(readme) {
@@ -115,12 +74,12 @@ function extractLanguageSections(readme) {
         hasLanguageTags = true;
         const langCode = match[1].trim();
         let content = match[2].trim();
+        // Clean up any remaining markers
         content = content.replace(/<!--/g, '').replace(/-->$/g, '').trim();
 
         languageTexts[langCode] = content;
         cleanReadme = cleanReadme.replace(match[0], '');
     }
-
     cleanReadme = cleanReadme.replace(/\n\s*\n/g, '\n').trim();
     cleanReadme = cleanReadme.replace(/<!--[\s\S]*?-->/g, '');
 

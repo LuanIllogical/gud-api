@@ -176,19 +176,20 @@ module.exports = async (req, res) => {
         if (readme) {
             const gudConfig = parseGudConfig(readme);
 
-            console.log('Parsed gudConfig keys:', Object.keys(gudConfig));
-
             if (gudConfig['repo-groups']) {
                 groupsConfig = extractGroupsFromConfig(gudConfig['repo-groups']);
+                console.log('Groups config extracted:', groupsConfig ? Object.keys(groupsConfig) : 'none');
             }
+
             if (gudConfig['background']) {
                 backgroundCSS = extractBackgroundFromConfig(gudConfig['background']);
-                console.log('Background CSS extracted:', backgroundCSS);
+                console.log('Background CSS extracted:', backgroundCSS ? 'yes' : 'none');
             }
 
             const extracted = extractLanguageSections(readme);
             languageTexts = extracted.languageTexts;
             console.log('Language texts found:', Object.keys(languageTexts));
+
             const { marked } = await import('marked');
             const createDOMPurify = await import('dompurify');
             const { JSDOM } = await import('jsdom');

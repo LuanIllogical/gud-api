@@ -65,27 +65,34 @@ function extractLanguageSections(readme) {
 
     let cleanReadme = readme;
 
+    const configBlockMatch = readme.match(/<!--\s*gud-[\s\S]*?-->/);
+    if (configBlockMatch) {
+        cleanReadme = cleanReadme.replace(configBlockMatch[0], '');
+    }
+
     const regex = /<!--\s*language-begin\s*=\s*([A-Za-z0-9\-_]+)\s*(?:-->)?\s*([\s\S]*?)\s*language-end\s*=\s*\1\s*-->/g;
 
     let match;
     let hasLanguageTags = false;
 
-    while ((match = regex.exec(readme)) !== null) {
+    const tempReadme = cleanReadme;
+    cleanReadme = tempReadme;
+
+    while ((match = regex.exec(tempReadme)) !== null) {
         hasLanguageTags = true;
         const langCode = match[1].trim();
         let content = match[2].trim();
-        // Clean up any remaining markers
         content = content.replace(/<!--/g, '').replace(/-->$/g, '').trim();
 
         languageTexts[langCode] = content;
         cleanReadme = cleanReadme.replace(match[0], '');
     }
+
     cleanReadme = cleanReadme.replace(/\n\s*\n/g, '\n').trim();
-    cleanReadme = cleanReadme.replace(/<!--[\s\S]*?-->/g, '');
 
     return {
         languageTexts: languageTexts,
-        cleanReadme: cleanReadme,
+        cleanReadme: cleanReadme || 'No README content',
         hasLanguageTags: hasLanguageTags
     };
 }
@@ -166,18 +173,19 @@ module.exports = async (req, res) => {
         if (readme) {
             const gudConfig = parseGudConfig(readme);
 
+            console.log('Parsed gudConfig keys:', Object.keys(gudConfig));
+
             if (gudConfig['repo-groups']) {
                 groupsConfig = extractGroupsFromConfig(gudConfig['repo-groups']);
             }
-
             if (gudConfig['background']) {
                 backgroundCSS = extractBackgroundFromConfig(gudConfig['background']);
+                console.log('Background CSS extracted:', backgroundCSS);
             }
 
             const extracted = extractLanguageSections(readme);
             languageTexts = extracted.languageTexts;
-
-
+            console.log('Language texts found:', Object.keys(languageTexts));
             const { marked } = await import('marked');
             const createDOMPurify = await import('dompurify');
             const { JSDOM } = await import('jsdom');

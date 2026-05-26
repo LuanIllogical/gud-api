@@ -5,20 +5,19 @@ function parseGudConfig(readme) {
 
     if (!readme) return config;
 
-    const gudBlockMatch = readme.match(/<!--\s*([\s\S]*?)\s*-->/);
-    if (!gudBlockMatch) return config;
+    const configMatch = readme.match(/<!--\s*([\s\S]*?(?:gud-repo-groups|gud-background)[\s\S]*?)-->/);
+    if (!configMatch) return config;
 
-    const block = gudBlockMatch[1];
+    const block = configMatch[1];
 
-    const sections = block.split(/\n(?=gud-)/);
+    const repoGroupsMatch = block.match(/gud-repo-groups:\s*{\s*([\s\S]*?)\s*}\s*(?=gud-background:|$)/);
+    if (repoGroupsMatch && repoGroupsMatch[1].trim()) {
+        config['repo-groups'] = repoGroupsMatch[1].trim();
+    }
 
-    for (const section of sections) {
-        const match = section.match(/^gud-([a-z-]+):\s*{\s*([\s\S]*?)\s*}\s*$/);
-        if (match) {
-            const key = match[1];
-            let value = match[2].trim();
-            config[key] = value;
-        }
+    const backgroundMatch = block.match(/gud-background:\s*{\s*([\s\S]*?)\s*}\s*$/);
+    if (backgroundMatch && backgroundMatch[1].trim()) {
+        config['background'] = backgroundMatch[1].trim();
     }
 
     return config;
@@ -65,20 +64,22 @@ function extractLanguageSections(readme) {
 
     let cleanReadme = readme;
 
-    const configBlockMatch = readme.match(/<!--\s*gud-[\s\S]*?-->/);
+    const configBlockMatch = cleanReadme.match(/<!--\s*[\s\S]*?(?:gud-repo-groups|gud-background)[\s\S]*?-->/);
     if (configBlockMatch) {
         cleanReadme = cleanReadme.replace(configBlockMatch[0], '');
     }
 
-    const regex = /<!--\s*language-begin\s*=\s*([A-Za-z0-9\-_]+)\s*(?:-->)?\s*([\s\S]*?)\s*language-end\s*=\s*\1\s*-->/g;
+    const regex = /<!--\s*gud-language-begin\s*=\s*([A-Za-z0-9\-_]+)\s*(?:-->)?\s*([\s\S]*?)\s*gud-language-end\s*=\s*\1\s*-->/g;
 
     let match;
     let hasLanguageTags = false;
 
-    const tempReadme = cleanReadme;
-    cleanReadme = tempReadme;
+    const matches = [];
+    while ((match = regex.exec(readme)) !== null) {
+        matches.push(match);
+    }
 
-    while ((match = regex.exec(tempReadme)) !== null) {
+    for (const match of matches) {
         hasLanguageTags = true;
         const langCode = match[1].trim();
         let content = match[2].trim();
@@ -89,6 +90,8 @@ function extractLanguageSections(readme) {
     }
 
     cleanReadme = cleanReadme.replace(/\n\s*\n/g, '\n').trim();
+
+    console.log('Found languages:', Object.keys(languageTexts));
 
     return {
         languageTexts: languageTexts,

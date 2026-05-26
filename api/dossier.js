@@ -33,37 +33,38 @@ function extractGroups(readme) {
 }
 
 function extractLanguageSections(readme) {
-    const sections = {};
-    if (!readme) return { languageContent: {}, commonContent: '' };
-
+    const languageContent = {};
     let commonContent = readme;
 
-    const defaultRegex = /<!--\s*default-language-begin\s*=\s*([A-Za-z0-9\-_]+)\s*-->([\s\S]*?)<!--\s*default-language-end\s*=\s*\1\s*-->/gi;
+    if (!readme) return { languageContent: {}, commonContent: '' };
+
+    // Extract default language format: <!-- default-language-begin = EN --> content <!-- default-language-end = EN -->
+    const defaultRegex = /<!--\s*default-language-begin\s*=\s*([A-Za-z0-9\-_]+)\s*-->([\s\S]*?)<!--\s*default-language-end\s*=\s*\1\s*-->/g;
 
     let match;
     while ((match = defaultRegex.exec(readme)) !== null) {
         const langCode = match[1].trim();
         let content = match[2].trim();
-        content = content.replace(/<!--/g, '').replace(/-->/g, '').trim();
-        sections[langCode] = content;
+        languageContent[langCode] = content;
         commonContent = commonContent.replace(match[0], '');
     }
 
-    const altRegex = /<!--\s*language-begin\s*=\s*([A-Za-z0-9\-_]+)\s*([\s\S]*?)language-end\s*=\s*\1\s*-->/gi;
+    // Extract alternative language format: <!-- language-begin = PT-BR content language-end = PT-BR -->
+    const altRegex = /<!--\s*language-begin\s*=\s*([A-Za-z0-9\-_]+)\s*([\s\S]*?)language-end\s*=\s*\1\s*-->/g;
 
     while ((match = altRegex.exec(readme)) !== null) {
         const langCode = match[1].trim();
         let content = match[2].trim();
-        content = content.replace(/-->$/, '').trim();
-        content = content.replace(/<!--/g, '').replace(/-->/g, '').trim();
-        sections[langCode] = content;
+        languageContent[langCode] = content;
         commonContent = commonContent.replace(match[0], '');
     }
 
-    commonContent = commonContent.replace(/<!--/g, '').replace(/-->/g, '').trim();
+    // Clean up common content - remove any remaining gud tags
+    commonContent = commonContent.replace(/<!--\s*gud-repo-groups:[\s\S]*?-->/g, '');
+    commonContent = commonContent.trim();
 
     return {
-        languageContent: sections,
+        languageContent: languageContent,
         commonContent: commonContent
     };
 }
@@ -125,7 +126,6 @@ module.exports = async (req, res) => {
         let readme = null;
         let readmeHTML = null;
         let languageSections = {};
-        let commonContentHTML = '';
 
         const branches = ["main", "master"];
 
@@ -141,12 +141,12 @@ module.exports = async (req, res) => {
         }
 
         let groupsConfig = null;
-        let extractedLanguages = null;
 
         if (readme) {
             groupsConfig = extractGroups(readme);
-            extractedLanguages = extractLanguageSections(readme);
+            const extracted = extractLanguageSections(readme);
 
+            // Dynamically import ESM modules
             const { marked } = await import('marked');
             const createDOMPurify = await import('dompurify');
             const { JSDOM } = await import('jsdom');
@@ -159,21 +159,26 @@ module.exports = async (req, res) => {
                 headerIds: false
             });
 
+            // Process common content
             let commonHTML = '';
-            if (extractedLanguages.commonContent && extractedLanguages.commonContent.trim()) {
-                const commonMarkdown = await marked.parse(extractedLanguages.commonContent);
+            if (extracted.commonContent) {
+                const commonMarkdown = await marked.parse(extracted.commonContent);
                 commonHTML = DOMPurify.sanitize(commonMarkdown);
             }
-            for (const [langCode, content] of Object.entries(extractedLanguages.languageContent)) {
-                if (content && content.trim()) {
+
+            // Process each language section and combine with common content in the SAME div
+            for (const [langCode, content] of Object.entries(extracted.languageContent)) {
+                if (content) {
                     const rawHTML = await marked.parse(content);
                     const sanitizedContent = DOMPurify.sanitize(rawHTML);
+                    // Combine into ONE continuous HTML string
                     languageSections[langCode] = sanitizedContent + commonHTML;
                 } else {
                     languageSections[langCode] = commonHTML;
                 }
             }
 
+            // If no language sections, put common content as default
             if (Object.keys(languageSections).length === 0 && commonHTML) {
                 languageSections['README'] = commonHTML;
             }

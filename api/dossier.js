@@ -34,7 +34,7 @@ function extractGroups(readme) {
 
 function extractLanguageSections(readme) {
     const sections = {};
-    if (!readme) return { sections: {}, commonContent: '' };
+    if (!readme) return { languageContent: {}, commonContent: '' };
 
     let commonContent = readme;
 
@@ -155,14 +155,16 @@ module.exports = async (req, res) => {
                 headerIds: false
             });
 
+            let commonHTML = '';
             if (extractedLanguages.commonContent) {
-                const commonHTML = await marked.parse(extractedLanguages.commonContent);
-                commonContentHTML = DOMPurify.sanitize(commonHTML);
+                const commonMarkdown = await marked.parse(extractedLanguages.commonContent);
+                commonHTML = DOMPurify.sanitize(commonMarkdown);
             }
 
             for (const [langCode, content] of Object.entries(extractedLanguages.languageContent)) {
                 const rawHTML = await marked.parse(content);
-                languageSections[langCode] = DOMPurify.sanitize(rawHTML);
+                const sanitizedContent = DOMPurify.sanitize(rawHTML);
+                languageSections[langCode] = sanitizedContent + commonHTML;
             }
 
             const rawHTML = await marked.parse(readme);
@@ -195,7 +197,6 @@ module.exports = async (req, res) => {
             user: userData,
             readme: readmeHTML,
             languageSections: languageSections,
-            commonContent: commonContentHTML,
             repos: {
                 grouped,
                 other

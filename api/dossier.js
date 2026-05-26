@@ -44,6 +44,7 @@ function extractLanguageSections(readme) {
     while ((match = defaultRegex.exec(readme)) !== null) {
         const langCode = match[1].trim();
         let content = match[2].trim();
+        content = content.replace(/<!--/g, '').replace(/-->/g, '').trim();
         sections[langCode] = content;
         commonContent = commonContent.replace(match[0], '');
     }
@@ -54,13 +55,16 @@ function extractLanguageSections(readme) {
         const langCode = match[1].trim();
         let content = match[2].trim();
         content = content.replace(/-->$/, '').trim();
+        content = content.replace(/<!--/g, '').replace(/-->/g, '').trim();
         sections[langCode] = content;
         commonContent = commonContent.replace(match[0], '');
     }
 
+    commonContent = commonContent.replace(/<!--/g, '').replace(/-->/g, '').trim();
+
     return {
         languageContent: sections,
-        commonContent: commonContent.trim()
+        commonContent: commonContent
     };
 }
 
@@ -156,15 +160,22 @@ module.exports = async (req, res) => {
             });
 
             let commonHTML = '';
-            if (extractedLanguages.commonContent) {
+            if (extractedLanguages.commonContent && extractedLanguages.commonContent.trim()) {
                 const commonMarkdown = await marked.parse(extractedLanguages.commonContent);
                 commonHTML = DOMPurify.sanitize(commonMarkdown);
             }
-
             for (const [langCode, content] of Object.entries(extractedLanguages.languageContent)) {
-                const rawHTML = await marked.parse(content);
-                const sanitizedContent = DOMPurify.sanitize(rawHTML);
-                languageSections[langCode] = sanitizedContent + commonHTML;
+                if (content && content.trim()) {
+                    const rawHTML = await marked.parse(content);
+                    const sanitizedContent = DOMPurify.sanitize(rawHTML);
+                    languageSections[langCode] = sanitizedContent + commonHTML;
+                } else {
+                    languageSections[langCode] = commonHTML;
+                }
+            }
+
+            if (Object.keys(languageSections).length === 0 && commonHTML) {
+                languageSections['README'] = commonHTML;
             }
 
             const rawHTML = await marked.parse(readme);

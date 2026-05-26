@@ -44,6 +44,41 @@ function extractGroups(readme) {
     return groups;
 }
 
+function extractLanguageSections(readme) {
+    const sections = {};
+    if (!readme) return sections;
+
+    let commonContent = readme;
+
+    const defaultRegex = /<!--\s*default-language-begin\s*=\s*([A-Za-z0-9\-_]+)\s*-->([\s\S]*?)<!--\s*default-language-end\s*=\s*\1\s*-->/gi;
+
+    let match;
+    while ((match = defaultRegex.exec(readme)) !== null) {
+        const langCode = match[1].trim();
+        let content = match[2].trim();
+        sections[langCode] = content;
+        commonContent = commonContent.replace(match[0], '');
+    }
+
+    const altRegex = /<!--\s*language-begin\s*=\s*([A-Za-z0-9\-_]+)\s*([\s\S]*?)language-end\s*=\s*\1\s*-->/gi;
+
+    while ((match = altRegex.exec(readme)) !== null) {
+        const langCode = match[1].trim();
+        let content = match[2].trim();
+        content = content.replace(/-->$/, '').trim();
+        sections[langCode] = content;
+        commonContent = commonContent.replace(match[0], '');
+    }
+
+    commonContent = commonContent.trim();
+
+    for (const langCode in sections) {
+        sections[langCode] = sections[langCode] + '\n\n' + commonContent;
+    }
+
+    return sections;
+}
+
 module.exports = async (req, res) => {
     try {
         res.setHeader("Access-Control-Allow-Origin", "*");
@@ -123,6 +158,10 @@ module.exports = async (req, res) => {
             const rawHTML = marked.parse(readme);
             readmeHTML = DOMPurify.sanitize(rawHTML);
         }
+        let languageSections = null;
+        if (readme) {
+            languageSections = extractLanguageSections(readme);
+        }
 
         const grouped = {};
         const used = new Set();
@@ -149,6 +188,7 @@ module.exports = async (req, res) => {
         return res.status(200).json({
             user: userData,
             readme: readmeHTML,
+            languageSections: languageSections,
             repos: {
                 grouped,
                 other

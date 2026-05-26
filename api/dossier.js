@@ -39,19 +39,19 @@ function extractLanguageSections(readme) {
 
     let cleanReadme = readme;
 
-    const regex = /<!--\s*language-begin\s*=\s*([A-Za-z0-9\-_]+)\s*-->([\s\S]*?)<!--\s*language-end\s*=\s*\1\s*-->/g;
+    const regex = /<!--\s*language-begin\s*=\s*([A-Za-z0-9\-_]+)\s*(?:-->)?\s*([\s\S]*?)\s*language-end\s*=\s*\1\s*-->/g;
 
     let match;
     while ((match = regex.exec(readme)) !== null) {
         const langCode = match[1].trim();
         let content = match[2].trim();
+        content = content.replace(/<!--/g, '').replace(/-->$/g, '').trim();
 
         languageTexts[langCode] = content;
-
         cleanReadme = cleanReadme.replace(match[0], '');
     }
 
-    cleanReadme = cleanReadme.replace(/\n\s*\n/g, '\n').trim();
+    console.log('Extracted languages:', Object.keys(languageTexts));
 
     return {
         languageTexts: languageTexts,

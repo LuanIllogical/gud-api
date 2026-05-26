@@ -33,9 +33,15 @@ function extractGroups(readme) {
 }
 
 function extractLanguageSections(readme) {
-    const languageTexts = {};
+    // Always return a proper object structure
+    const result = {
+        languageTexts: {},
+        cleanReadme: readme || ''
+    };
 
-    if (!readme) return languageTexts;
+    if (!readme) return result;
+
+    let cleanReadme = readme;
 
     // Extract content between language-begin and language-end markers
     const regex = /<!--\s*language-begin\s*=\s*([A-Za-z0-9\-_]+)\s*-->([\s\S]*?)<!--\s*language-end\s*=\s*\1\s*-->/g;
@@ -45,17 +51,15 @@ function extractLanguageSections(readme) {
         const langCode = match[1].trim();
         let content = match[2].trim();
 
-        // Store the raw text (preserve HTML structure but keep as string)
-        languageTexts[langCode] = content;
+        // Store the raw text
+        result.languageTexts[langCode] = content;
 
-        // Remove the markers from readme but keep the content
-        readme = readme.replace(match[0], content);
+        // Remove the markers from cleanReadme but keep the content
+        cleanReadme = cleanReadme.replace(match[0], content);
     }
 
-    return {
-        languageTexts: languageTexts,
-        cleanReadme: readme
-    };
+    result.cleanReadme = cleanReadme;
+    return result;
 }
 
 module.exports = async (req, res) => {
@@ -113,7 +117,9 @@ module.exports = async (req, res) => {
         }
 
         let readme = null;
-        let languageSections = {};
+        let groupsConfig = null;
+        let languageTexts = {};
+        let sanitizedHTML = '';
 
         const branches = ["main", "master"];
 
@@ -128,13 +134,10 @@ module.exports = async (req, res) => {
             }
         }
 
-        let languageTexts = {};
-        let sanitizedHTML = '';
-
         if (readme) {
             groupsConfig = extractGroups(readme);
             const extracted = extractLanguageSections(readme);
-            languageTexts = extracted.languageTexts;  // Store this
+            languageTexts = extracted.languageTexts;
 
             // Process the clean README (with markers removed)
             const { marked } = await import('marked');
@@ -154,7 +157,6 @@ module.exports = async (req, res) => {
             sanitizedHTML = DOMPurify.sanitize(fullHTML);
         }
 
-        let groupsConfig = null;
         const grouped = {};
         const used = new Set();
 
@@ -179,8 +181,8 @@ module.exports = async (req, res) => {
 
         return res.status(200).json({
             user: userData,
-            readme: sanitizedHTML,  // Use sanitizedHTML here
-            languageTexts: languageTexts,  // Send languageTexts (not languageSections)
+            readme: sanitizedHTML,
+            languageTexts: languageTexts,
             repos: {
                 grouped,
                 other

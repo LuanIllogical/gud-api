@@ -1,8 +1,3 @@
-// Remove these require lines at the top:
-// const { marked } = require("marked");
-// const createDOMPurify = require("dompurify");
-// const { JSDOM } = require("jsdom");
-
 const normalize = (s) => (s || "").toLowerCase();
 
 function extractGroups(readme) {
@@ -39,7 +34,7 @@ function extractGroups(readme) {
 
 function extractLanguageSections(readme) {
     const sections = {};
-    if (!readme) return sections;
+    if (!readme) return { sections: {}, commonContent: '' };
 
     let commonContent = readme;
 
@@ -63,13 +58,10 @@ function extractLanguageSections(readme) {
         commonContent = commonContent.replace(match[0], '');
     }
 
-    commonContent = commonContent.trim();
-
-    for (const langCode in sections) {
-        sections[langCode] = sections[langCode] + '\n\n' + commonContent;
-    }
-
-    return sections;
+    return {
+        languageContent: sections,
+        commonContent: commonContent.trim()
+    };
 }
 
 module.exports = async (req, res) => {
@@ -128,6 +120,8 @@ module.exports = async (req, res) => {
 
         let readme = null;
         let readmeHTML = null;
+        let languageSections = {};
+        let commonContentHTML = '';
 
         const branches = ["main", "master"];
 
@@ -143,13 +137,12 @@ module.exports = async (req, res) => {
         }
 
         let groupsConfig = null;
-        let languageSections = null;
+        let extractedLanguages = null;
 
         if (readme) {
             groupsConfig = extractGroups(readme);
-            languageSections = extractLanguageSections(readme);
+            extractedLanguages = extractLanguageSections(readme);
 
-            // Dynamically import ESM modules
             const { marked } = await import('marked');
             const createDOMPurify = await import('dompurify');
             const { JSDOM } = await import('jsdom');
@@ -161,6 +154,16 @@ module.exports = async (req, res) => {
                 mangle: false,
                 headerIds: false
             });
+
+            if (extractedLanguages.commonContent) {
+                const commonHTML = await marked.parse(extractedLanguages.commonContent);
+                commonContentHTML = DOMPurify.sanitize(commonHTML);
+            }
+
+            for (const [langCode, content] of Object.entries(extractedLanguages.languageContent)) {
+                const rawHTML = await marked.parse(content);
+                languageSections[langCode] = DOMPurify.sanitize(rawHTML);
+            }
 
             const rawHTML = await marked.parse(readme);
             readmeHTML = DOMPurify.sanitize(rawHTML);
@@ -192,6 +195,7 @@ module.exports = async (req, res) => {
             user: userData,
             readme: readmeHTML,
             languageSections: languageSections,
+            commonContent: commonContentHTML,
             repos: {
                 grouped,
                 other

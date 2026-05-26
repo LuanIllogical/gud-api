@@ -33,96 +33,58 @@ function extractGroups(readme) {
 }
 
 function extractLanguageSections(readme) {
-    const result = {
-        languageTexts: {},
-        cleanReadme: readme || ''
-    };
+    const languageTexts = {};
 
-    if (!readme) return result;
+    if (!readme) return { languageTexts: {}, cleanReadme: '' };
 
     let cleanReadme = readme;
-    let currentLanguage = null;
-    let currentContent = [];
-    let inLanguageBlock = false;
-    let isAltFormat = false;
 
-    const lines = readme.split('\n');
-    const newLines = [];
+    // Find all language blocks - both formats
+    // Format 1: <!-- language-begin = EN --> content <!-- language-end = EN -->
+    // Format 2: <!-- language-begin = PT-BR content language-end = PT-BR -->
 
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
+    // First, handle standard format (with --&gt; on both ends)
+    const standardPattern = /<!--\s*language-begin\s*=\s*([A-Za-z0-9\-_]+)\s*-->([\s\S]*?)<!--\s*language-end\s*=\s*\1\s*-->/g;
+    let match;
 
-        // Check for language-begin
-        const beginMatch = line.match(/<!--\s*language-begin\s*=\s*([A-Za-z0-9\-_]+)\s*-->/);
-        const altBeginMatch = line.match(/<!--\s*language-begin\s*=\s*([A-Za-z0-9\-_]+)\s*$/);
+    while ((match = standardPattern.exec(readme)) !== null) {
+        const langCode = match[1].trim();
+        let content = match[2].trim();
 
-        if (beginMatch) {
-            // Standard format
-            currentLanguage = beginMatch[1].trim();
-            inLanguageBlock = true;
-            isAltFormat = false;
-            currentContent = [];
-            // Don't add this line to cleanReadme (remove the marker)
-            continue;
-        } else if (altBeginMatch) {
-            // Alternative format (no closing -->)
-            currentLanguage = altBeginMatch[1].trim();
-            inLanguageBlock = true;
-            isAltFormat = true;
-            currentContent = [];
-            // Don't add this line to cleanReadme (remove the marker)
-            continue;
-        }
-
-        // Check for language-end
-        const endMatch = line.match(/<!--\s*language-end\s*=\s*([A-Za-z0-9\-_]+)\s*-->/);
-
-        if (endMatch && inLanguageBlock && currentLanguage === endMatch[1].trim()) {
-            // End of language block
-            const content = currentContent.join('\n').trim();
-            if (result.languageTexts[currentLanguage]) {
-                result.languageTexts[currentLanguage] += ' ' + content;
-            } else {
-                result.languageTexts[currentLanguage] = content;
-            }
-            inLanguageBlock = false;
-            currentLanguage = null;
-            currentContent = [];
-            // Don't add this line to cleanReadme (remove the marker)
-            continue;
-        }
-
-        // Check for alt format end (no HTML comment wrapper)
-        if (isAltFormat && inLanguageBlock && line.includes(`language-end = ${currentLanguage}`)) {
-            // End of alt language block
-            const content = currentContent.join('\n').trim();
-            if (result.languageTexts[currentLanguage]) {
-                result.languageTexts[currentLanguage] += ' ' + content;
-            } else {
-                result.languageTexts[currentLanguage] = content;
-            }
-            inLanguageBlock = false;
-            currentLanguage = null;
-            isAltFormat = false;
-            currentContent = [];
-            // Don't add this line (remove the marker)
-            continue;
-        }
-
-        // If we're in a language block, collect content
-        if (inLanguageBlock) {
-            currentContent.push(line);
-            // Don't add to cleanReadme (these are language-specific)
+        if (languageTexts[langCode]) {
+            languageTexts[langCode] += '\n' + content;
         } else {
-            // Not in a language block, keep in cleanReadme
-            newLines.push(line);
+            languageTexts[langCode] = content;
         }
+
+        // Remove the markers from cleanReadme
+        cleanReadme = cleanReadme.replace(match[0], '');
     }
 
-    // Also capture any remaining content (like the second EN tag)
-    result.cleanReadme = newLines.join('\n');
+    // Handle alternative format (opening comment has no closing --&gt;)
+    const altPattern = /<!--\s*language-begin\s*=\s*([A-Za-z0-9\-_]+)\s*\n([\s\S]*?)\n\s*language-end\s*=\s*\1\s*-->/g;
 
-    return result;
+    while ((match = altPattern.exec(readme)) !== null) {
+        const langCode = match[1].trim();
+        let content = match[2].trim();
+
+        if (languageTexts[langCode]) {
+            languageTexts[langCode] += '\n' + content;
+        } else {
+            languageTexts[langCode] = content;
+        }
+
+        // Remove this entire block from cleanReadme
+        cleanReadme = cleanReadme.replace(match[0], '');
+    }
+
+    // Clean up extra whitespace in cleanReadme
+    cleanReadme = cleanReadme.replace(/\n\s*\n/g, '\n\n').trim();
+
+    return {
+        languageTexts: languageTexts,
+        cleanReadme: cleanReadme
+    };
 }
 
 module.exports = async (req, res) => {
@@ -201,6 +163,8 @@ module.exports = async (req, res) => {
             groupsConfig = extractGroups(readme);
             const extracted = extractLanguageSections(readme);
             languageTexts = extracted.languageTexts;
+
+            console.log('Extracted languages:', Object.keys(languageTexts)); // Debug log
 
             // Process the clean README (with markers removed)
             const { marked } = await import('marked');

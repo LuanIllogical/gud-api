@@ -54,7 +54,21 @@ function extractGroupsFromConfig(groupsConfig) {
 
 function extractBackgroundFromConfig(backgroundConfig) {
     if (!backgroundConfig) return null;
-    return backgroundConfig.replace(/\s+/g, ' ').trim();
+
+    const value = backgroundConfig.replace(/\s+/g, ' ').trim();
+
+    const dangerousPatterns = [
+        /javascript:/i,
+        /expression\s*\(/i,
+        /@import/i,
+        /<script/i
+    ];
+
+    if (dangerousPatterns.some(pattern => pattern.test(value))) {
+        return null;
+    }
+
+    return value;
 }
 
 function extractLanguageSections(readme) {
@@ -102,7 +116,7 @@ function extractLanguageSections(readme) {
 
 module.exports = async (req, res) => {
     try {
-        res.setHeader("Access-Control-Allow-Origin", "https://luanillogical.github.io/");
+        res.setHeader("Access-Control-Allow-Origin", "https://luanillogical.github.io");
         res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
         res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
@@ -135,23 +149,43 @@ module.exports = async (req, res) => {
             });
         }
 
-        const repoRes = await fetch(
-            `https://api.github.com/users/${user}/repos?per_page=100`,
-            {
-                headers: {
-                    Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
-                    "User-Agent": "repo-viewer"
+        let repos = [];
+        let page = 1;
+
+        while (true) {
+            const repoRes = await fetch(
+                `https://api.github.com/users/${user}/repos?per_page=100&page=${page}`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+                        "User-Agent": "repo-viewer"
+                    }
                 }
+            );
+
+            const pageRepos = await repoRes.json();
+
+            if (!repoRes.ok) {
+                return res.status(500).json({
+                    error: "GitHub API error",
+                    debug: pageRepos
+                });
             }
-        );
 
-        const repos = await repoRes.json();
+            if (!Array.isArray(pageRepos)) {
+                return res.status(500).json({
+                    error: "Invalid repo response",
+                    debug: pageRepos
+                });
+            }
 
-        if (!Array.isArray(repos)) {
-            return res.status(500).json({
-                error: "GitHub API error",
-                debug: repos
-            });
+            repos.push(...pageRepos);
+
+            if (pageRepos.length < 100) {
+                break;
+            }
+
+            page++;
         }
 
         let readme = null;
@@ -160,17 +194,21 @@ module.exports = async (req, res) => {
         let sanitizedHTML = '';
         let backgroundCSS = null;
 
-        const branches = ["main", "master"];
-
-        for (const branch of branches) {
-            const resReadme = await fetch(
-                `https://raw.githubusercontent.com/${user}/${user}/${branch}/README.md`
-            );
-
-            if (resReadme.ok) {
-                readme = await resReadme.text();
-                break;
+        const readmeRes = await fetch(
+            `https://api.github.com/repos/${user}/${user}/readme`,
+            {
+                headers: {
+                    Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+                    "User-Agent": "repo-viewer",
+                    Accept: "application/vnd.github.raw"
+                }
             }
+        );
+
+        if (readmeRes.ok) {
+            readme = await readmeRes.text();
+        } else {
+            console.log("README not found");
         }
 
         if (readme) {
@@ -194,16 +232,20 @@ module.exports = async (req, res) => {
             const createDOMPurify = await import('dompurify');
             const { JSDOM } = await import('jsdom');
 
-            const window = new JSDOM("").window;
-            const DOMPurify = createDOMPurify.default(window);
-
+            const jsdom = new JSDOM("");
+            const DOMPurify = createDOMPurify.default(jsdom.window);
             marked.setOptions({
                 mangle: false,
                 headerIds: false
             });
 
-            const fullHTML = await marked.parse(extracted.cleanReadme);
+            const fullHTML = await marked.parse(extracted.cleanReadme, {
+                mangle: false,
+                headerIds: false
+            });
             sanitizedHTML = DOMPurify.sanitize(fullHTML);
+
+            jsdom.window.close();
         }
 
         const grouped = {};

@@ -33,54 +33,29 @@ function extractGroups(readme) {
 }
 
 function extractLanguageSections(readme) {
-    const languageContent = {};
-    let commonContent = readme;
+    const languageTexts = {};
 
-    if (!readme) return { languageContent: {}, commonContent: '' };
+    if (!readme) return languageTexts;
 
-    // Extract default language format as plain text
-    const defaultRegex = /<!--\s*default-language-begin\s*=\s*([A-Za-z0-9\-_]+)\s*-->([\s\S]*?)<!--\s*default-language-end\s*=\s*\1\s*-->/g;
+    // Extract content between language-begin and language-end markers
+    const regex = /<!--\s*language-begin\s*=\s*([A-Za-z0-9\-_]+)\s*-->([\s\S]*?)<!--\s*language-end\s*=\s*\1\s*-->/g;
 
     let match;
-    while ((match = defaultRegex.exec(readme)) !== null) {
+    while ((match = regex.exec(readme)) !== null) {
         const langCode = match[1].trim();
         let content = match[2].trim();
-        // Store as plain text, not HTML
-        languageContent[langCode] = content;
-        // Remove the markers but keep the content visible
-        commonContent = commonContent.replace(match[0], content);
+
+        // Store the raw text (preserve HTML structure but keep as string)
+        languageTexts[langCode] = content;
+
+        // Remove the markers from readme but keep the content
+        readme = readme.replace(match[0], content);
     }
-
-    // Extract alternative language format as plain text
-    const altRegex = /<!--\s*language-begin\s*=\s*([A-Za-z0-9\-_]+)\s*([\s\S]*?)language-end\s*=\s*\1\s*-->/g;
-
-    while ((match = altRegex.exec(readme)) !== null) {
-        const langCode = match[1].trim();
-        let content = match[2].trim();
-        // Store as plain text
-        languageContent[langCode] = content;
-        // Remove the markers but keep the content visible
-        commonContent = commonContent.replace(match[0], content);
-    }
-
-    // Remove any remaining language markers from common content
-    commonContent = commonContent.replace(/<!--\s*default-language-begin[\s\S]*?-->/g, '');
-    commonContent = commonContent.replace(/<!--\s*language-begin[\s\S]*?language-end[\s\S]*?-->/g, '');
 
     return {
-        languageContent: languageContent,
-        commonContent: commonContent.trim()
+        languageTexts: languageTexts,
+        cleanReadme: readme
     };
-}
-
-function insertBeforeClosingDivs(html, commonHTML) {
-    if (!commonHTML) return html;
-
-    const lastDivIndex = html.lastIndexOf('</div>');
-    if (lastDivIndex !== -1) {
-        return html.slice(0, lastDivIndex) + commonHTML + html.slice(lastDivIndex);
-    }
-    return html + commonHTML;
 }
 
 module.exports = async (req, res) => {
@@ -160,7 +135,7 @@ module.exports = async (req, res) => {
             groupsConfig = extractGroups(readme);
             const extracted = extractLanguageSections(readme);
 
-            // Process the FULL readme once to get the complete HTML structure
+            // Process the clean README (with markers removed)
             const { marked } = await import('marked');
             const createDOMPurify = await import('dompurify');
             const { JSDOM } = await import('jsdom');
@@ -173,18 +148,9 @@ module.exports = async (req, res) => {
                 headerIds: false
             });
 
-            // Get the complete HTML structure
-            const fullHTML = await marked.parse(readme);
-            const sanitizedFullHTML = DOMPurify.sanitize(fullHTML);
-
-            // Store the full HTML as fallback
-            readmeHTML = sanitizedFullHTML;
-
-            // For each language, we'll replace just the text content
-            // But since we can't easily replace text in HTML, we'll store the plain text
-            // and let the frontend do text replacement on the DOM
-            languageSections = extracted.languageContent;
-            commonContent = extracted.commonContent;
+            // Get the full HTML structure (without any markers)
+            const fullHTML = await marked.parse(extracted.cleanReadme);
+            const sanitizedHTML = DOMPurify.sanitize(fullHTML);
         }
 
         const grouped = {};
@@ -211,9 +177,8 @@ module.exports = async (req, res) => {
 
         return res.status(200).json({
             user: userData,
-            readme: readmeHTML,
-            languageSections: languageSections,
-            commonContent: commonContent,
+            readme: sanitizedHTML,  // Complete HTML structure
+            languageTexts: extracted.languageTexts,  // Raw text for each language
             repos: { grouped, other }
         });
 

@@ -146,7 +146,6 @@ module.exports = async (req, res) => {
             groupsConfig = extractGroups(readme);
             const extracted = extractLanguageSections(readme);
 
-            // Dynamically import ESM modules
             const { marked } = await import('marked');
             const createDOMPurify = await import('dompurify');
             const { JSDOM } = await import('jsdom');
@@ -159,32 +158,28 @@ module.exports = async (req, res) => {
                 headerIds: false
             });
 
-            // Process common content
             let commonHTML = '';
             if (extracted.commonContent) {
                 const commonMarkdown = await marked.parse(extracted.commonContent);
                 commonHTML = DOMPurify.sanitize(commonMarkdown);
             }
 
-            // Process each language section and combine with common content in the SAME div
             for (const [langCode, content] of Object.entries(extracted.languageContent)) {
                 if (content) {
                     const rawHTML = await marked.parse(content);
                     const sanitizedContent = DOMPurify.sanitize(rawHTML);
-                    // Combine into ONE continuous HTML string
-                    languageSections[langCode] = sanitizedContent + commonHTML;
+                    languageSections[langCode] = `<div class="lang-readme-wrapper">${sanitizedContent}${commonHTML}</div>`;
                 } else {
-                    languageSections[langCode] = commonHTML;
+                    languageSections[langCode] = `<div class="lang-readme-wrapper">${commonHTML}</div>`;
                 }
             }
 
-            // If no language sections, put common content as default
             if (Object.keys(languageSections).length === 0 && commonHTML) {
                 languageSections['README'] = commonHTML;
             }
 
             const rawHTML = await marked.parse(readme);
-            readmeHTML = DOMPurify.sanitize(rawHTML);
+            readmeHTML = DOMPurify.sanitize(rawHTML).replace("--&gt", "");
         }
 
         const grouped = {};

@@ -1,14 +1,7 @@
-const { marked } = require("marked");
-const createDOMPurify = require("dompurify");
-const { JSDOM } = require("jsdom");
-
-const window = new JSDOM("").window;
-const DOMPurify = createDOMPurify(window);
-
-marked.setOptions({
-    mangle: false,
-    headerIds: false
-});
+// Remove these require lines at the top:
+// const { marked } = require("marked");
+// const createDOMPurify = require("dompurify");
+// const { JSDOM } = require("jsdom");
 
 const normalize = (s) => (s || "").toLowerCase();
 
@@ -150,17 +143,27 @@ module.exports = async (req, res) => {
         }
 
         let groupsConfig = null;
+        let languageSections = null;
 
         if (readme) {
             groupsConfig = extractGroups(readme);
-        }
-        if (readme) {
-            const rawHTML = marked.parse(readme);
-            readmeHTML = DOMPurify.sanitize(rawHTML);
-        }
-        let languageSections = null;
-        if (readme) {
             languageSections = extractLanguageSections(readme);
+
+            // Dynamically import ESM modules
+            const { marked } = await import('marked');
+            const createDOMPurify = await import('dompurify');
+            const { JSDOM } = await import('jsdom');
+
+            const window = new JSDOM("").window;
+            const DOMPurify = createDOMPurify.default(window);
+
+            marked.setOptions({
+                mangle: false,
+                headerIds: false
+            });
+
+            const rawHTML = await marked.parse(readme);
+            readmeHTML = DOMPurify.sanitize(rawHTML);
         }
 
         const grouped = {};
@@ -196,6 +199,7 @@ module.exports = async (req, res) => {
         });
 
     } catch (err) {
+        console.error('Error:', err);
         return res.status(500).json({
             error: "Server crashed",
             message: err.message

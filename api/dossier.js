@@ -1,35 +1,102 @@
 const normalize = (s) => (s || "").toLowerCase();
 
-function extractGroups(readme) {
-    const start = readme.indexOf("gud-repo-groups:");
+function parseGudConfig(readme) {
+    const config = {};
+
+    if (!readme) return config;
+
+    const start = readme.indexOf("<!--");
     const end = readme.indexOf("-->", start);
 
-    if (start === -1 || end === -1) return null;
+    if (start === -1 || end === -1) return config;
 
-    const block = readme.slice(start, end);
+    const block = readme.slice(start + 4, end);
+
+    const lines = block.split("\n");
+    let currentKey = null;
+    let currentValue = [];
+    let inBrace = false;
+
+    for (let line of lines) {
+        line = line.trim();
+        if (!line) continue;
+
+        const keyMatch = line.match(/^gud-([a-z-]+):\s*{?/);
+        if (keyMatch) {
+            if (currentKey && currentValue.length > 0) {
+                config[currentKey] = currentValue.join('\n').trim();
+                currentValue = [];
+            }
+
+            currentKey = keyMatch[1];
+            const hasOpeningBrace = line.includes('{');
+            const afterColon = line.replace(/^gud-[a-z-]+:\s*{?\s*/, '');
+
+            if (hasOpeningBrace) {
+                inBrace = true;
+                if (afterColon && afterColon !== '{') {
+                    currentValue.push(afterColon);
+                }
+            } else {
+                inBrace = false;
+                if (afterColon) {
+                    currentValue.push(afterColon);
+                }
+            }
+            continue;
+        }
+
+        if (inBrace && currentKey) {
+            const hasClosingBrace = line.includes('}');
+            const cleanedLine = line.replace(/}$/, '');
+            if (cleanedLine) {
+                currentValue.push(cleanedLine);
+            }
+            if (hasClosingBrace) {
+                inBrace = false;
+            }
+        }
+    }
+
+    if (currentKey && currentValue.length > 0) {
+        config[currentKey] = currentValue.join('\n').trim();
+    }
+
+    return config;
+}
+
+function extractGroupsFromConfig(groupsConfig) {
+    if (!groupsConfig) return null;
 
     const groups = {};
-
-    const lines = block
-        .split("\n")
-        .map(l => l.trim())
-        .filter(l => l.includes("="));
+    const lines = groupsConfig.split("\n");
 
     for (const line of lines) {
-        const [left, right] = line.split("=");
-        if (!left || !right) continue;
+        const trimmedLine = line.trim();
+        if (!trimmedLine) continue;
 
-        const groupName = left.trim();
+        const equalIndex = trimmedLine.indexOf("=");
+        if (equalIndex === -1) continue;
 
-        const repos = right
+        const groupName = trimmedLine.substring(0, equalIndex).trim();
+        const reposStr = trimmedLine.substring(equalIndex + 1).trim();
+
+        const repos = reposStr
             .split(",")
             .map(r => r.trim())
             .filter(Boolean);
 
-        groups[groupName] = repos;
+        if (groupName && repos.length > 0) {
+            groups[groupName] = repos;
+        }
     }
 
-    return groups;
+    return Object.keys(groups).length > 0 ? groups : null;
+}
+
+function extractBackgroundFromConfig(backgroundConfig) {
+    if (!backgroundConfig) return null;
+    return backgroundConfig.trim();
 }
 
 function extractLanguageSections(readme) {
@@ -55,6 +122,7 @@ function extractLanguageSections(readme) {
     }
 
     cleanReadme = cleanReadme.replace(/\n\s*\n/g, '\n').trim();
+    cleanReadme = cleanReadme.replace(/<!--[\s\S]*?-->/g, '');
 
     return {
         languageTexts: languageTexts,
@@ -120,8 +188,8 @@ module.exports = async (req, res) => {
         let readme = null;
         let groupsConfig = null;
         let languageTexts = {};
-        let fallbackHTML = '';
-        let hasLanguageTags = false;
+        let sanitizedHTML = '';
+        let backgroundCSS = null;
 
         const branches = ["main", "master"];
 
@@ -137,10 +205,19 @@ module.exports = async (req, res) => {
         }
 
         if (readme) {
-            groupsConfig = extractGroups(readme);
+            const gudConfig = parseGudConfig(readme);
+
+            if (gudConfig['repo-groups']) {
+                groupsConfig = extractGroupsFromConfig(gudConfig['repo-groups']);
+            }
+
+            if (gudConfig['background']) {
+                backgroundCSS = extractBackgroundFromConfig(gudConfig['background']);
+            }
+
             const extracted = extractLanguageSections(readme);
             languageTexts = extracted.languageTexts;
-            hasLanguageTags = extracted.hasLanguageTags;
+
 
             const { marked } = await import('marked');
             const createDOMPurify = await import('dompurify');
@@ -154,20 +231,8 @@ module.exports = async (req, res) => {
                 headerIds: false
             });
 
-            if (hasLanguageTags && Object.keys(languageTexts).length > 0) {
-                for (const [langCode, content] of Object.entries(languageTexts)) {
-                    const rawHTML = await marked.parse(content);
-                    languageTexts[langCode] = DOMPurify.sanitize(rawHTML);
-                }
-                const firstLang = Object.keys(languageTexts)[0];
-                if (firstLang) {
-                    fallbackHTML = languageTexts[firstLang];
-                }
-            } else {
-                const rawHTML = await marked.parse(readme);
-                fallbackHTML = DOMPurify.sanitize(rawHTML);
-                languageTexts = { 'README': fallbackHTML };
-            }
+            const fullHTML = await marked.parse(extracted.cleanReadme);
+            sanitizedHTML = DOMPurify.sanitize(fullHTML);
         }
 
         const grouped = {};
@@ -194,9 +259,9 @@ module.exports = async (req, res) => {
 
         return res.status(200).json({
             user: userData,
-            readme: fallbackHTML,
+            readme: sanitizedHTML,
             languageTexts: languageTexts,
-            hasLanguageTags: hasLanguageTags,
+            backgroundCSS: backgroundCSS,
             repos: {
                 grouped,
                 other

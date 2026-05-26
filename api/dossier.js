@@ -35,14 +35,17 @@ function extractGroups(readme) {
 function extractLanguageSections(readme) {
     const languageTexts = {};
 
-    if (!readme) return { languageTexts: {}, cleanReadme: '' };
+    if (!readme) return { languageTexts: {}, cleanReadme: '', hasLanguageTags: false };
 
     let cleanReadme = readme;
 
     const regex = /<!--\s*language-begin\s*=\s*([A-Za-z0-9\-_]+)\s*(?:-->)?\s*([\s\S]*?)\s*language-end\s*=\s*\1\s*-->/g;
 
     let match;
+    let hasLanguageTags = false;
+
     while ((match = regex.exec(readme)) !== null) {
+        hasLanguageTags = true;
         const langCode = match[1].trim();
         let content = match[2].trim();
         content = content.replace(/<!--/g, '').replace(/-->$/g, '').trim();
@@ -51,11 +54,12 @@ function extractLanguageSections(readme) {
         cleanReadme = cleanReadme.replace(match[0], '');
     }
 
-    console.log('Extracted languages:', Object.keys(languageTexts));
+    cleanReadme = cleanReadme.replace(/\n\s*\n/g, '\n').trim();
 
     return {
         languageTexts: languageTexts,
-        cleanReadme: cleanReadme
+        cleanReadme: cleanReadme,
+        hasLanguageTags: hasLanguageTags
     };
 }
 
@@ -117,6 +121,7 @@ module.exports = async (req, res) => {
         let groupsConfig = null;
         let languageTexts = {};
         let fallbackHTML = '';
+        let hasLanguageTags = false;
 
         const branches = ["main", "master"];
 
@@ -135,6 +140,7 @@ module.exports = async (req, res) => {
             groupsConfig = extractGroups(readme);
             const extracted = extractLanguageSections(readme);
             languageTexts = extracted.languageTexts;
+            hasLanguageTags = extracted.hasLanguageTags;
 
             const { marked } = await import('marked');
             const createDOMPurify = await import('dompurify');
@@ -148,14 +154,19 @@ module.exports = async (req, res) => {
                 headerIds: false
             });
 
-            for (const [langCode, content] of Object.entries(languageTexts)) {
-                const rawHTML = await marked.parse(content);
-                languageTexts[langCode] = DOMPurify.sanitize(rawHTML);
-            }
-
-            const firstLang = Object.keys(languageTexts)[0];
-            if (firstLang) {
-                fallbackHTML = languageTexts[firstLang];
+            if (hasLanguageTags && Object.keys(languageTexts).length > 0) {
+                for (const [langCode, content] of Object.entries(languageTexts)) {
+                    const rawHTML = await marked.parse(content);
+                    languageTexts[langCode] = DOMPurify.sanitize(rawHTML);
+                }
+                const firstLang = Object.keys(languageTexts)[0];
+                if (firstLang) {
+                    fallbackHTML = languageTexts[firstLang];
+                }
+            } else {
+                const rawHTML = await marked.parse(readme);
+                fallbackHTML = DOMPurify.sanitize(rawHTML);
+                languageTexts = { 'README': fallbackHTML };
             }
         }
 
@@ -185,6 +196,7 @@ module.exports = async (req, res) => {
             user: userData,
             readme: fallbackHTML,
             languageTexts: languageTexts,
+            hasLanguageTags: hasLanguageTags,
             repos: {
                 grouped,
                 other

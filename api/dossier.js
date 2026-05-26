@@ -39,47 +39,19 @@ function extractLanguageSections(readme) {
 
     let cleanReadme = readme;
 
-    // Find all language blocks - both formats
-    // Format 1: <!-- language-begin = EN --> content <!-- language-end = EN -->
-    // Format 2: <!-- language-begin = PT-BR content language-end = PT-BR -->
+    const regex = /<!--\s*language-begin\s*=\s*([A-Za-z0-9\-_]+)\s*-->([\s\S]*?)<!--\s*language-end\s*=\s*\1\s*-->/g;
 
-    // First, handle standard format (with --&gt; on both ends)
-    const standardPattern = /<!--\s*language-begin\s*=\s*([A-Za-z0-9\-_]+)\s*-->([\s\S]*?)<!--\s*language-end\s*=\s*\1\s*-->/g;
     let match;
-
-    while ((match = standardPattern.exec(readme)) !== null) {
+    while ((match = regex.exec(readme)) !== null) {
         const langCode = match[1].trim();
         let content = match[2].trim();
 
-        if (languageTexts[langCode]) {
-            languageTexts[langCode] += '\n' + content;
-        } else {
-            languageTexts[langCode] = content;
-        }
+        languageTexts[langCode] = content;
 
-        // Remove the markers from cleanReadme
         cleanReadme = cleanReadme.replace(match[0], '');
     }
 
-    // Handle alternative format (opening comment has no closing --&gt;)
-    const altPattern = /<!--\s*language-begin\s*=\s*([A-Za-z0-9\-_]+)\s*\n([\s\S]*?)\n\s*language-end\s*=\s*\1\s*-->/g;
-
-    while ((match = altPattern.exec(readme)) !== null) {
-        const langCode = match[1].trim();
-        let content = match[2].trim();
-
-        if (languageTexts[langCode]) {
-            languageTexts[langCode] += '\n' + content;
-        } else {
-            languageTexts[langCode] = content;
-        }
-
-        // Remove this entire block from cleanReadme
-        cleanReadme = cleanReadme.replace(match[0], '');
-    }
-
-    // Clean up extra whitespace in cleanReadme
-    cleanReadme = cleanReadme.replace(/\n\s*\n/g, '\n\n').trim();
+    cleanReadme = cleanReadme.replace(/\n\s*\n/g, '\n').trim();
 
     return {
         languageTexts: languageTexts,
@@ -144,7 +116,7 @@ module.exports = async (req, res) => {
         let readme = null;
         let groupsConfig = null;
         let languageTexts = {};
-        let sanitizedHTML = '';
+        let fallbackHTML = '';
 
         const branches = ["main", "master"];
 
@@ -164,9 +136,6 @@ module.exports = async (req, res) => {
             const extracted = extractLanguageSections(readme);
             languageTexts = extracted.languageTexts;
 
-            console.log('Extracted languages:', Object.keys(languageTexts)); // Debug log
-
-            // Process the clean README (with markers removed)
             const { marked } = await import('marked');
             const createDOMPurify = await import('dompurify');
             const { JSDOM } = await import('jsdom');
@@ -179,9 +148,15 @@ module.exports = async (req, res) => {
                 headerIds: false
             });
 
-            // Get the full HTML structure (without any markers)
-            const fullHTML = await marked.parse(extracted.cleanReadme);
-            sanitizedHTML = DOMPurify.sanitize(fullHTML);
+            for (const [langCode, content] of Object.entries(languageTexts)) {
+                const rawHTML = await marked.parse(content);
+                languageTexts[langCode] = DOMPurify.sanitize(rawHTML);
+            }
+
+            const firstLang = Object.keys(languageTexts)[0];
+            if (firstLang) {
+                fallbackHTML = languageTexts[firstLang];
+            }
         }
 
         const grouped = {};
@@ -208,7 +183,7 @@ module.exports = async (req, res) => {
 
         return res.status(200).json({
             user: userData,
-            readme: sanitizedHTML,
+            readme: fallbackHTML,
             languageTexts: languageTexts,
             repos: {
                 grouped,

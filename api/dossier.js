@@ -33,7 +33,6 @@ function extractGroups(readme) {
 }
 
 function extractLanguageSections(readme) {
-    // Always return a proper object structure
     const result = {
         languageTexts: {},
         cleanReadme: readme || ''
@@ -42,23 +41,87 @@ function extractLanguageSections(readme) {
     if (!readme) return result;
 
     let cleanReadme = readme;
+    let currentLanguage = null;
+    let currentContent = [];
+    let inLanguageBlock = false;
+    let isAltFormat = false;
 
-    // Extract content between language-begin and language-end markers
-    const regex = /<!--\s*language-begin\s*=\s*([A-Za-z0-9\-_]+)\s*-->([\s\S]*?)<!--\s*language-end\s*=\s*\1\s*-->/g;
+    const lines = readme.split('\n');
+    const newLines = [];
 
-    let match;
-    while ((match = regex.exec(readme)) !== null) {
-        const langCode = match[1].trim();
-        let content = match[2].trim();
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
 
-        // Store the raw text
-        result.languageTexts[langCode] = content;
+        // Check for language-begin
+        const beginMatch = line.match(/<!--\s*language-begin\s*=\s*([A-Za-z0-9\-_]+)\s*-->/);
+        const altBeginMatch = line.match(/<!--\s*language-begin\s*=\s*([A-Za-z0-9\-_]+)\s*$/);
 
-        // Remove the markers from cleanReadme but keep the content
-        cleanReadme = cleanReadme.replace(match[0], content);
+        if (beginMatch) {
+            // Standard format
+            currentLanguage = beginMatch[1].trim();
+            inLanguageBlock = true;
+            isAltFormat = false;
+            currentContent = [];
+            // Don't add this line to cleanReadme (remove the marker)
+            continue;
+        } else if (altBeginMatch) {
+            // Alternative format (no closing -->)
+            currentLanguage = altBeginMatch[1].trim();
+            inLanguageBlock = true;
+            isAltFormat = true;
+            currentContent = [];
+            // Don't add this line to cleanReadme (remove the marker)
+            continue;
+        }
+
+        // Check for language-end
+        const endMatch = line.match(/<!--\s*language-end\s*=\s*([A-Za-z0-9\-_]+)\s*-->/);
+
+        if (endMatch && inLanguageBlock && currentLanguage === endMatch[1].trim()) {
+            // End of language block
+            const content = currentContent.join('\n').trim();
+            if (result.languageTexts[currentLanguage]) {
+                result.languageTexts[currentLanguage] += ' ' + content;
+            } else {
+                result.languageTexts[currentLanguage] = content;
+            }
+            inLanguageBlock = false;
+            currentLanguage = null;
+            currentContent = [];
+            // Don't add this line to cleanReadme (remove the marker)
+            continue;
+        }
+
+        // Check for alt format end (no HTML comment wrapper)
+        if (isAltFormat && inLanguageBlock && line.includes(`language-end = ${currentLanguage}`)) {
+            // End of alt language block
+            const content = currentContent.join('\n').trim();
+            if (result.languageTexts[currentLanguage]) {
+                result.languageTexts[currentLanguage] += ' ' + content;
+            } else {
+                result.languageTexts[currentLanguage] = content;
+            }
+            inLanguageBlock = false;
+            currentLanguage = null;
+            isAltFormat = false;
+            currentContent = [];
+            // Don't add this line (remove the marker)
+            continue;
+        }
+
+        // If we're in a language block, collect content
+        if (inLanguageBlock) {
+            currentContent.push(line);
+            // Don't add to cleanReadme (these are language-specific)
+        } else {
+            // Not in a language block, keep in cleanReadme
+            newLines.push(line);
+        }
     }
 
-    result.cleanReadme = cleanReadme;
+    // Also capture any remaining content (like the second EN tag)
+    result.cleanReadme = newLines.join('\n');
+
     return result;
 }
 

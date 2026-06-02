@@ -232,6 +232,7 @@ function sanitizeEventPayload(type, payload) {
 
     switch (type) {
         case 'PushEvent':
+            console.log('Raw PushEvent payload keys:', Object.keys(payload), 'size:', payload.size, 'distinct_size:', payload.distinct_size);
             sanitized.commits = (payload.commits || []).slice(0, 3).map(c => ({
                 message: c.message.length > 100 ? c.message.substring(0, 97) + '...' : c.message,
                 sha: c.sha.substring(0, 7),

@@ -116,7 +116,6 @@ function extractLanguageSections(readme) {
 
 async function fetchContributionData(username, token) {
     try {
-        // Use GitHub's GraphQL API for contribution data
         const query = `
             query($username: String!) {
                 user(login: $username) {
@@ -159,7 +158,6 @@ async function fetchContributionData(username, token) {
         const calendar = data.data?.user?.contributionsCollection?.contributionCalendar;
         if (!calendar) return null;
 
-        // Transform to a more usable format
         const contributions = [];
         calendar.weeks.forEach(week => {
             week.contributionDays.forEach(day => {
@@ -206,7 +204,6 @@ async function fetchRecentActivity(username, token) {
 
         const events = await response.json();
 
-        // Clean and format events for frontend
         return events.map(event => ({
             id: event.id,
             type: event.type,
@@ -232,7 +229,6 @@ function sanitizeEventPayload(type, payload) {
 
     switch (type) {
         case 'PushEvent':
-            console.log('Raw PushEvent payload keys:', Object.keys(payload), 'size:', payload.size, 'distinct_size:', payload.distinct_size);
             sanitized.commits = (payload.commits || []).slice(0, 3).map(c => ({
                 message: c.message.length > 100 ? c.message.substring(0, 97) + '...' : c.message,
                 sha: c.sha.substring(0, 7),
@@ -291,18 +287,14 @@ function sanitizeEventPayload(type, payload) {
     return sanitized;
 }
 
-// Add this helper function to your backend
 function adaptContributionColorsToBackground(backgroundCSS, contributionData) {
     if (!contributionData || !contributionData.contributions) return contributionData;
 
-    // Detect background style and generate matching contribution colors
-    let backgroundType = 'dark'; // default
-    let baseHue = 142; // default GitHub green hue
+    let backgroundType = 'dark';
+    let baseHue = 142;
 
     if (backgroundCSS) {
-        // Extract colors from background CSS to determine theme
         if (backgroundCSS.includes('linear-gradient') || backgroundCSS.includes('radial-gradient')) {
-            // Extract colors from gradient
             const colorMatches = backgroundCSS.match(/#[0-9a-f]{6}|#[0-9a-f]{3}|rgb\([^)]+\)|hsl\([^)]+\)/gi);
             if (colorMatches && colorMatches.length > 0) {
                 const dominantColor = colorMatches[0];
@@ -315,7 +307,6 @@ function adaptContributionColorsToBackground(backgroundCSS, contributionData) {
             }
         }
 
-        // Detect if background is light or dark
         if (backgroundCSS.toLowerCase().includes('white') ||
             backgroundCSS.includes('#fff') ||
             backgroundCSS.includes('#f') ||
@@ -326,10 +317,8 @@ function adaptContributionColorsToBackground(backgroundCSS, contributionData) {
         }
     }
 
-    // Generate contribution colors that complement the background
     const contributionColors = generateContributionColors(baseHue, backgroundType);
 
-    // Add color information to each contribution
     contributionData.contributions = contributionData.contributions.map(contrib => ({
         ...contrib,
         adaptedColor: contributionColors[contrib.level] || contributionColors[0]
@@ -341,7 +330,6 @@ function adaptContributionColorsToBackground(backgroundCSS, contributionData) {
 }
 
 function getHueFromColor(color) {
-    // Convert color to HSL and extract hue
     let r, g, b;
 
     if (color.startsWith('#')) {
@@ -355,7 +343,7 @@ function getHueFromColor(color) {
             g = parseInt(hex.substring(2, 4), 16);
             b = parseInt(hex.substring(4, 6), 16);
         } else {
-            return 142; // default green
+            return 142;
         }
     } else if (color.startsWith('rgb')) {
         const matches = color.match(/\d+/g);
@@ -370,7 +358,6 @@ function getHueFromColor(color) {
         return 142;
     }
 
-    // Convert RGB to HSL
     r /= 255;
     g /= 255;
     b /= 255;
@@ -431,13 +418,12 @@ function generateContributionColors(baseHue, backgroundType) {
         };
     }
 }
-// Also extract color scheme from custom CSS variables if present
+
 function extractCustomColorScheme(backgroundCSS) {
     if (!backgroundCSS) return null;
 
     const colorScheme = {};
 
-    // Look for custom CSS variable definitions for contribution colors
     const varMatches = backgroundCSS.match(/--contrib-level-(\d):\s*([^;]+)/g);
     if (varMatches) {
         varMatches.forEach(match => {
@@ -457,7 +443,7 @@ function extractCustomColorScheme(backgroundCSS) {
 
 module.exports = async (req, res) => {
     try {
-        res.setHeader("Access-Control-Allow-Origin", "*"); // https://luanillogical.github.io
+        res.setHeader("Access-Control-Allow-Origin", "https://luanillogical.github.io");
         res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
         res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
@@ -614,7 +600,6 @@ module.exports = async (req, res) => {
         try {
             contributionData = await fetchContributionData(user, process.env.GITHUB_TOKEN);
 
-            // Adapt contribution colors to match the background
             if (contributionData && backgroundCSS) {
                 contributionData = adaptContributionColorsToBackground(backgroundCSS, contributionData);
             }
@@ -622,13 +607,11 @@ module.exports = async (req, res) => {
             console.error('Failed to fetch contributions:', err);
         }
 
-        // Also check if backgroundCSS defines custom contribution colors
         const customColors = extractCustomColorScheme(backgroundCSS);
         if (customColors && contributionData) {
             contributionData.customColorScheme = customColors;
         }
 
-        // Fetch recent activity
         let recentActivity = [];
         try {
             recentActivity = await fetchRecentActivity(user, process.env.GITHUB_TOKEN);

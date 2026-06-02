@@ -419,28 +419,6 @@ function generateContributionColors(baseHue, backgroundType) {
     }
 }
 
-function extractCustomColorScheme(backgroundCSS) {
-    if (!backgroundCSS) return null;
-
-    const colorScheme = {};
-
-    const varMatches = backgroundCSS.match(/--contrib-level-(\d):\s*([^;]+)/g);
-    if (varMatches) {
-        varMatches.forEach(match => {
-            const levelMatch = match.match(/--contrib-level-(\d):\s*([^;]+)/);
-            if (levelMatch) {
-                const level = parseInt(levelMatch[1]);
-                const color = levelMatch[2].trim();
-                if (level >= 0 && level <= 4) {
-                    colorScheme[level] = color;
-                }
-            }
-        });
-    }
-
-    return Object.keys(colorScheme).length > 0 ? colorScheme : null;
-}
-
 module.exports = async (req, res) => {
     try {
         res.setHeader("Access-Control-Allow-Origin", "https://luanillogical.github.io");
@@ -605,11 +583,6 @@ module.exports = async (req, res) => {
             }
         } catch (err) {
             console.error('Failed to fetch contributions:', err);
-        }
-
-        const customColors = extractCustomColorScheme(backgroundCSS);
-        if (customColors && contributionData) {
-            contributionData.customColorScheme = customColors;
         }
 
         let recentActivity = [];

@@ -114,9 +114,334 @@ function extractLanguageSections(readme) {
     };
 }
 
+async function fetchContributionData(username, token) {
+    try {
+        // Use GitHub's GraphQL API for contribution data
+        const query = `
+            query($username: String!) {
+                user(login: $username) {
+                    contributionsCollection {
+                        contributionCalendar {
+                            totalContributions
+                            weeks {
+                                contributionDays {
+                                    date
+                                    contributionCount
+                                    color
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        `;
+
+        const response = await fetch('https://api.github.com/graphql', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                'User-Agent': 'repo-viewer'
+            },
+            body: JSON.stringify({
+                query: query,
+                variables: { username: username }
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.errors) {
+            console.error('GraphQL errors:', data.errors);
+            return null;
+        }
+
+        const calendar = data.data?.user?.contributionsCollection?.contributionCalendar;
+        if (!calendar) return null;
+
+        // Transform to a more usable format
+        const contributions = [];
+        calendar.weeks.forEach(week => {
+            week.contributionDays.forEach(day => {
+                contributions.push({
+                    date: day.date,
+                    count: day.contributionCount,
+                    level: getContributionLevel(day.contributionCount),
+                    color: day.color
+                });
+            });
+        });
+
+        return {
+            total: calendar.totalContributions,
+            contributions: contributions
+        };
+    } catch (err) {
+        console.error('Error fetching contributions:', err);
+        return null;
+    }
+}
+
+function getContributionLevel(count) {
+    if (count === 0) return 0;
+    if (count <= 3) return 1;
+    if (count <= 6) return 2;
+    if (count <= 9) return 3;
+    return 4;
+}
+
+async function fetchRecentActivity(username, token) {
+    try {
+        const response = await fetch(
+            `https://api.github.com/users/${username}/events?per_page=30`,
+            {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'User-Agent': 'repo-viewer'
+                }
+            }
+        );
+
+        if (!response.ok) return [];
+
+        const events = await response.json();
+
+        // Clean and format events for frontend
+        return events.map(event => ({
+            id: event.id,
+            type: event.type,
+            repo: {
+                name: event.repo.name,
+                url: `https://github.com/${event.repo.name}`
+            },
+            created_at: event.created_at,
+            payload: sanitizeEventPayload(event.type, event.payload),
+            actor: {
+                login: event.actor.login,
+                avatar: event.actor.avatar_url
+            }
+        }));
+    } catch (err) {
+        console.error('Error fetching activity:', err);
+        return [];
+    }
+}
+
+function sanitizeEventPayload(type, payload) {
+    const sanitized = {};
+
+    switch (type) {
+        case 'PushEvent':
+            sanitized.commits = (payload.commits || []).slice(0, 3).map(c => ({
+                message: c.message.length > 100 ? c.message.substring(0, 97) + '...' : c.message,
+                sha: c.sha.substring(0, 7),
+                url: c.url
+            }));
+            sanitized.ref = payload.ref?.replace('refs/heads/', '');
+            sanitized.size = payload.size;
+            break;
+        case 'CreateEvent':
+            sanitized.ref_type = payload.ref_type;
+            sanitized.ref = payload.ref;
+            break;
+        case 'IssuesEvent':
+            if (payload.issue) {
+                sanitized.action = payload.action;
+                sanitized.issue = {
+                    number: payload.issue.number,
+                    title: payload.issue.title.length > 80 ? payload.issue.title.substring(0, 77) + '...' : payload.issue.title,
+                    url: payload.issue.html_url
+                };
+            }
+            break;
+        case 'PullRequestEvent':
+            if (payload.pull_request) {
+                sanitized.action = payload.action;
+                sanitized.pr = {
+                    number: payload.pull_request.number,
+                    title: payload.pull_request.title.length > 80 ? payload.pull_request.title.substring(0, 77) + '...' : payload.pull_request.title,
+                    url: payload.pull_request.html_url
+                };
+            }
+            break;
+        case 'WatchEvent':
+            sanitized.action = payload.action;
+            break;
+        case 'ForkEvent':
+            if (payload.forkee) {
+                sanitized.forkee = {
+                    full_name: payload.forkee.full_name,
+                    url: payload.forkee.html_url
+                };
+            }
+            break;
+        case 'IssueCommentEvent':
+            if (payload.comment && payload.issue) {
+                sanitized.action = payload.action;
+                sanitized.body = payload.comment.body?.length > 100 ? payload.comment.body.substring(0, 97) + '...' : payload.comment.body;
+                sanitized.issue_number = payload.issue.number;
+            }
+            break;
+        default:
+            sanitized.action = payload.action;
+    }
+
+    return sanitized;
+}
+
+// Add this helper function to your backend
+function adaptContributionColorsToBackground(backgroundCSS, contributionData) {
+    if (!contributionData || !contributionData.contributions) return contributionData;
+
+    // Detect background style and generate matching contribution colors
+    let backgroundType = 'dark'; // default
+    let baseHue = 142; // default GitHub green hue
+
+    if (backgroundCSS) {
+        // Extract colors from background CSS to determine theme
+        if (backgroundCSS.includes('linear-gradient') || backgroundCSS.includes('radial-gradient')) {
+            // Extract colors from gradient
+            const colorMatches = backgroundCSS.match(/#[0-9a-f]{6}|#[0-9a-f]{3}|rgb\([^)]+\)|hsl\([^)]+\)/gi);
+            if (colorMatches && colorMatches.length > 0) {
+                const dominantColor = colorMatches[0];
+                baseHue = getHueFromColor(dominantColor);
+            }
+        } else if (backgroundCSS.includes('#')) {
+            const colorMatch = backgroundCSS.match(/#[0-9a-f]{6}|#[0-9a-f]{3}/);
+            if (colorMatch) {
+                baseHue = getHueFromColor(colorMatch[0]);
+            }
+        }
+
+        // Detect if background is light or dark
+        if (backgroundCSS.toLowerCase().includes('white') ||
+            backgroundCSS.includes('#fff') ||
+            backgroundCSS.includes('#f') ||
+            (backgroundCSS.includes('rgb') && backgroundCSS.match(/\d+/g)?.[0] > 200)) {
+            backgroundType = 'light';
+        } else {
+            backgroundType = 'dark';
+        }
+    }
+
+    // Generate contribution colors that complement the background
+    const contributionColors = generateContributionColors(baseHue, backgroundType);
+
+    // Add color information to each contribution
+    contributionData.contributions = contributionData.contributions.map(contrib => ({
+        ...contrib,
+        adaptedColor: contributionColors[contrib.level] || contributionColors[0]
+    }));
+
+    contributionData.colorScheme = contributionColors;
+
+    return contributionData;
+}
+
+function getHueFromColor(color) {
+    // Convert color to HSL and extract hue
+    let r, g, b;
+
+    if (color.startsWith('#')) {
+        const hex = color.substring(1);
+        if (hex.length === 3) {
+            r = parseInt(hex[0] + hex[0], 16);
+            g = parseInt(hex[1] + hex[1], 16);
+            b = parseInt(hex[2] + hex[2], 16);
+        } else if (hex.length === 6) {
+            r = parseInt(hex.substring(0, 2), 16);
+            g = parseInt(hex.substring(2, 4), 16);
+            b = parseInt(hex.substring(4, 6), 16);
+        } else {
+            return 142; // default green
+        }
+    } else if (color.startsWith('rgb')) {
+        const matches = color.match(/\d+/g);
+        if (matches && matches.length >= 3) {
+            r = parseInt(matches[0]);
+            g = parseInt(matches[1]);
+            b = parseInt(matches[2]);
+        } else {
+            return 142;
+        }
+    } else {
+        return 142;
+    }
+
+    // Convert RGB to HSL
+    r /= 255;
+    g /= 255;
+    b /= 255;
+
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    let hue = 0;
+
+    if (max === min) {
+        hue = 0;
+    } else if (max === r) {
+        hue = 60 * ((g - b) / (max - min));
+    } else if (max === g) {
+        hue = 60 * (2 + (b - r) / (max - min));
+    } else {
+        hue = 60 * (4 + (r - g) / (max - min));
+    }
+
+    if (hue < 0) hue += 360;
+
+    return hue;
+}
+
+function generateContributionColors(baseHue, backgroundType) {
+    // Generate 5 contribution levels that harmonize with the background
+    const colors = [];
+
+    if (backgroundType === 'dark') {
+        // For dark backgrounds: use brighter, more saturated versions
+        colors[0] = `hsla(${baseHue}, 30%, 15%, 0.3)`; // Level 0 - very subtle
+        colors[1] = `hsla(${baseHue}, 65%, 30%, 0.7)`; // Level 1 - low activity
+        colors[2] = `hsla(${baseHue}, 70%, 40%, 0.85)`; // Level 2 - medium activity
+        colors[3] = `hsla(${baseHue}, 75%, 50%, 0.95)`; // Level 3 - high activity
+        colors[4] = `hsla(${baseHue}, 80%, 60%, 1)`; // Level 4 - very high activity
+    } else {
+        // For light backgrounds: use darker, more saturated versions for contrast
+        colors[0] = `hsla(${baseHue}, 20%, 85%, 0.5)`; // Level 0
+        colors[1] = `hsla(${baseHue}, 55%, 55%, 0.8)`; // Level 1
+        colors[2] = `hsla(${baseHue}, 60%, 45%, 0.9)`; // Level 2
+        colors[3] = `hsla(${baseHue}, 65%, 35%, 0.95)`; // Level 3
+        colors[4] = `hsla(${baseHue}, 70%, 25%, 1)`; // Level 4
+    }
+
+    return colors;
+}
+
+// Also extract color scheme from custom CSS variables if present
+function extractCustomColorScheme(backgroundCSS) {
+    if (!backgroundCSS) return null;
+
+    const colorScheme = {};
+
+    // Look for custom CSS variable definitions for contribution colors
+    const varMatches = backgroundCSS.match(/--contrib-level-(\d):\s*([^;]+)/g);
+    if (varMatches) {
+        varMatches.forEach(match => {
+            const levelMatch = match.match(/--contrib-level-(\d):\s*([^;]+)/);
+            if (levelMatch) {
+                const level = parseInt(levelMatch[1]);
+                const color = levelMatch[2].trim();
+                if (level >= 0 && level <= 4) {
+                    colorScheme[level] = color;
+                }
+            }
+        });
+    }
+
+    return Object.keys(colorScheme).length > 0 ? colorScheme : null;
+}
+
 module.exports = async (req, res) => {
     try {
-        res.setHeader("Access-Control-Allow-Origin", "https://luanillogical.github.io");
+        res.setHeader("Access-Control-Allow-Origin", "*"); // https://luanillogical.github.io
         res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
         res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
@@ -270,6 +595,31 @@ module.exports = async (req, res) => {
 
         const other = repos.filter(r => !used.has(r.name));
 
+        try {
+            contributionData = await fetchContributionData(user, process.env.GITHUB_TOKEN);
+
+            // Adapt contribution colors to match the background
+            if (contributionData && backgroundCSS) {
+                contributionData = adaptContributionColorsToBackground(backgroundCSS, contributionData);
+            }
+        } catch (err) {
+            console.error('Failed to fetch contributions:', err);
+        }
+
+        // Also check if backgroundCSS defines custom contribution colors
+        const customColors = extractCustomColorScheme(backgroundCSS);
+        if (customColors && contributionData) {
+            contributionData.customColorScheme = customColors;
+        }
+
+        // Fetch recent activity
+        let recentActivity = [];
+        try {
+            recentActivity = await fetchRecentActivity(user, process.env.GITHUB_TOKEN);
+        } catch (err) {
+            console.error('Failed to fetch activity:', err);
+        }
+
         return res.status(200).json({
             user: userData,
             readme: sanitizedHTML,
@@ -278,7 +628,9 @@ module.exports = async (req, res) => {
             repos: {
                 grouped,
                 other
-            }
+            },
+            contributions: contributionData,
+            recentActivity: recentActivity
         });
 
     } catch (err) {

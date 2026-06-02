@@ -239,6 +239,7 @@ function sanitizeEventPayload(type, payload) {
             }));
             sanitized.ref = payload.ref?.replace('refs/heads/', '');
             sanitized.size = payload.size;
+            sanitized.distinct_size = payload.distinct_size;
             break;
         case 'CreateEvent':
             sanitized.ref_type = payload.ref_type;

@@ -393,28 +393,42 @@ function getHueFromColor(color) {
 }
 
 function generateContributionColors(baseHue, backgroundType) {
-    // Generate 5 contribution levels that harmonize with the background
-    const colors = [];
-
     if (backgroundType === 'dark') {
-        // For dark backgrounds: use brighter, more saturated versions
-        colors[0] = `hsla(${baseHue}, 30%, 15%, 0.3)`; // Level 0 - very subtle
-        colors[1] = `hsla(${baseHue}, 65%, 30%, 0.7)`; // Level 1 - low activity
-        colors[2] = `hsla(${baseHue}, 70%, 40%, 0.85)`; // Level 2 - medium activity
-        colors[3] = `hsla(${baseHue}, 75%, 50%, 0.95)`; // Level 3 - high activity
-        colors[4] = `hsla(${baseHue}, 80%, 60%, 1)`; // Level 4 - very high activity
+        return {
+            fills: [
+                `hsla(${baseHue}, 20%, 10%, 0.15)`,
+                `hsla(${baseHue}, 60%, 22%, 0.55)`,
+                `hsla(${baseHue}, 65%, 32%, 0.65)`,
+                `hsla(${baseHue}, 70%, 44%, 0.72)`,
+                `hsla(${baseHue}, 75%, 56%, 0.80)`,
+            ],
+            borders: [
+                `hsla(${baseHue}, 20%, 30%, 0.18)`,
+                `hsla(${baseHue}, 65%, 40%, 0.70)`,
+                `hsla(${baseHue}, 70%, 52%, 0.80)`,
+                `hsla(${baseHue}, 75%, 62%, 0.85)`,
+                `hsla(${baseHue}, 80%, 72%, 0.90)`,
+            ]
+        };
     } else {
-        // For light backgrounds: use darker, more saturated versions for contrast
-        colors[0] = `hsla(${baseHue}, 20%, 85%, 0.5)`; // Level 0
-        colors[1] = `hsla(${baseHue}, 55%, 55%, 0.8)`; // Level 1
-        colors[2] = `hsla(${baseHue}, 60%, 45%, 0.9)`; // Level 2
-        colors[3] = `hsla(${baseHue}, 65%, 35%, 0.95)`; // Level 3
-        colors[4] = `hsla(${baseHue}, 70%, 25%, 1)`; // Level 4
+        return {
+            fills: [
+                `hsla(${baseHue}, 15%, 90%, 0.40)`,
+                `hsla(${baseHue}, 50%, 60%, 0.55)`,
+                `hsla(${baseHue}, 55%, 48%, 0.65)`,
+                `hsla(${baseHue}, 60%, 38%, 0.75)`,
+                `hsla(${baseHue}, 65%, 28%, 0.85)`,
+            ],
+            borders: [
+                `hsla(${baseHue}, 15%, 70%, 0.25)`,
+                `hsla(${baseHue}, 55%, 72%, 0.70)`,
+                `hsla(${baseHue}, 60%, 60%, 0.80)`,
+                `hsla(${baseHue}, 65%, 50%, 0.85)`,
+                `hsla(${baseHue}, 70%, 40%, 0.90)`,
+            ]
+        };
     }
-
-    return colors;
 }
-
 // Also extract color scheme from custom CSS variables if present
 function extractCustomColorScheme(backgroundCSS) {
     if (!backgroundCSS) return null;

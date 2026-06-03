@@ -421,7 +421,7 @@ function generateContributionColors(baseHue, backgroundType) {
 
 module.exports = async (req, res) => {
     try {
-        res.setHeader("Access-Control-Allow-Origin", "*"); // https://luanillogical.github.io
+        res.setHeader("Access-Control-Allow-Origin", "https://luanillogical.github.io");
         res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
         res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 

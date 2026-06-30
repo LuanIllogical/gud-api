@@ -534,6 +534,7 @@ module.exports = async (req, res) => {
         let languageTexts = {};
         let sanitizedHTML = '';
         let backgroundCSS = null;
+        let customLevelColors = null;
 
         const readmeRes = await fetch(
             `https://api.github.com/repos/${user}/${user}/readme`,

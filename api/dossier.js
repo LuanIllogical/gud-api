@@ -177,7 +177,6 @@ async function fetchContributionData(username, token) {
                     date: day.date,
                     count: day.contributionCount,
                     level: getContributionLevel(day.contributionCount),
-                    color: day.color
                 });
             });
         });
@@ -414,10 +413,10 @@ function getGitHubGreenColors() {
 function getDefaultTransparentColors() {
     return {
         0: 'rgba(255, 255, 255, 0.04)',
-        1: 'rgba(255, 255, 255, 0.10)',
-        2: 'rgba(255, 255, 255, 0.20)',
-        3: 'rgba(255, 255, 255, 0.35)',
-        4: 'rgba(255, 255, 255, 0.50)'
+        1: 'rgba(255, 255, 255, 0.08)',
+        2: 'rgba(255, 255, 255, 0.12)',
+        3: 'rgba(255, 255, 255, 0.16)',
+        4: 'rgba(255, 255, 255, 0.20)'
     };
 }
 
@@ -601,7 +600,6 @@ module.exports = async (req, res) => {
             readme: sanitizedHTML,
             languageTexts: languageTexts,
             backgroundCSS: backgroundCSS,
-            customLevelColors: customLevelColors,
             repos: {
                 grouped,
                 other

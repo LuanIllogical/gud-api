@@ -448,7 +448,7 @@ async function findVideoFiles(username, path = '') {
             await findVideoFiles(username, item.path);
         }
     }
-    return viewPreviews;
+    return videoPreviews;
 }
 
 module.exports = async (req, res) => {

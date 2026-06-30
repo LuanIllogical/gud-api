@@ -398,11 +398,6 @@ function adaptContributionColorsToBackground(backgroundCSS, contributionData, cu
 
     contributionData.colorScheme = colorScheme;
 
-    contributionData.contributions = contributionData.contributions.map(contrib => ({
-        ...contrib,
-        adaptedColor: colorScheme[contrib.level] || colorScheme[0]
-    }));
-
     return contributionData;
 }
 

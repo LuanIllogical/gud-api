@@ -5,24 +5,24 @@ function parseGudConfig(readme) {
 
     if (!readme) return config;
 
-    const configMatch = readme.match(/<!--\s*([\s\S]*?(?:gud-repo-groups|gud-background)[\s\S]*?)-->/);
+    const configMatch = readme.match(/<!--\s*([\s\S]*?(?:gud-repo-groups|gud-background|gud-level-color|gud-custom-color)[\s\S]*?)-->/);
     if (!configMatch) return config;
 
     const block = configMatch[1];
 
-    const repoGroupsMatch = block.match(/gud-repo-groups:\s*{\s*([\s\S]*?)\s*}\s*(?=gud-background:|$)/);
+    const repoGroupsMatch = block.match(/gud-repo-groups:\s*{\s*([\s\S]*?)\s*}\s*(?=gud-background:|gud-level-color-|gud-custom-color-|$)/);
     if (repoGroupsMatch && repoGroupsMatch[1].trim()) {
         config['repo-groups'] = repoGroupsMatch[1].trim();
     }
 
-    const backgroundMatch = block.match(/gud-background:\s*{\s*([\s\S]*?)\s*}\s*$/);
+    const backgroundMatch = block.match(/gud-background:\s*{\s*([\s\S]*?)\s*}\s*(?=gud-level-color-|gud-custom-color-|$)/);
     if (backgroundMatch && backgroundMatch[1].trim()) {
         config['background'] = backgroundMatch[1].trim();
     }
 
     const levelColors = {};
     for (let i = 0; i <= 4; i++) {
-        const colorMatch = block.match(new RegExp(`gud-level-color-${i}:\\s*([^;\\n]+)`));
+        colorMatch = block.match(new RegExp(`gud-custom-color-${i}:\\s*([^;\\n]+)`));
         if (colorMatch && colorMatch[1].trim()) {
             levelColors[i] = colorMatch[1].trim();
         }
@@ -351,6 +351,8 @@ function getHueFromColor(color) {
 }
 
 function parseColorString(colorStr) {
+    colorStr = colorStr.trim().replace(/^["']|["']$/g, '');
+
     if (/^#([0-9a-f]{3}){1,2}$/i.test(colorStr)) {
         return colorStr;
     }

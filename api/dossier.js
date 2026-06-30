@@ -422,6 +422,33 @@ function getDefaultTransparentColors() {
     };
 }
 
+async function findVideoFiles(username, path = '') {
+    const contentsRes = await fetch(
+        `https://api.github.com/repos/${username}/${username}/contents/${path}`,
+        {
+            headers: {
+                Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+                'User-Agent': 'repo-viewer'
+            }
+        }
+    );
+
+    if (!contentsRes.ok) return;
+
+    const contents = await contentsRes.json();
+
+    if (!Array.isArray(contents)) return;
+
+    for (const item of contents) {
+        if (item.type === 'file' && item.name.endsWith('.webm')) {
+            const repoName = item.name.replace(/\.webm$/, '');
+            videoPreviews[repoName] = item.name;
+        } else if (item.type === 'dir') {
+            await findVideoFiles(username, item.path);
+        }
+    }
+}
+
 module.exports = async (req, res) => {
     try {
         res.setHeader("Access-Control-Allow-Origin", "*"); // https://luanillogical.github.io
@@ -516,8 +543,7 @@ module.exports = async (req, res) => {
 
         if (readmeRes.ok) {
             readme = await readmeRes.text();
-        } else {
-            console.log("README not found");
+            await findVideoFiles(user);
         }
 
         if (readme) {
@@ -607,7 +633,8 @@ module.exports = async (req, res) => {
                 other
             },
             contributions: contributionData,
-            recentActivity: recentActivity
+            recentActivity: recentActivity,
+            videoPreviews: videoPreviews
         });
 
     } catch (err) {

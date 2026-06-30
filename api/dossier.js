@@ -299,48 +299,6 @@ function sanitizeEventPayload(type, payload) {
     return sanitized;
 }
 
-function adaptContributionColorsToBackground(backgroundCSS, contributionData) {
-    if (!contributionData || !contributionData.contributions) return contributionData;
-
-    let backgroundType = 'dark';
-    let baseHue = 142;
-
-    if (backgroundCSS) {
-        if (backgroundCSS.includes('linear-gradient') || backgroundCSS.includes('radial-gradient')) {
-            const colorMatches = backgroundCSS.match(/#[0-9a-f]{6}|#[0-9a-f]{3}|rgb\([^)]+\)|hsl\([^)]+\)/gi);
-            if (colorMatches && colorMatches.length > 0) {
-                const dominantColor = colorMatches[0];
-                baseHue = getHueFromColor(dominantColor);
-            }
-        } else if (backgroundCSS.includes('#')) {
-            const colorMatch = backgroundCSS.match(/#[0-9a-f]{6}|#[0-9a-f]{3}/);
-            if (colorMatch) {
-                baseHue = getHueFromColor(colorMatch[0]);
-            }
-        }
-
-        if (backgroundCSS.toLowerCase().includes('white') ||
-            backgroundCSS.includes('#fff') ||
-            backgroundCSS.includes('#f') ||
-            (backgroundCSS.includes('rgb') && backgroundCSS.match(/\d+/g)?.[0] > 200)) {
-            backgroundType = 'light';
-        } else {
-            backgroundType = 'dark';
-        }
-    }
-
-    const contributionColors = generateContributionColors(baseHue, backgroundType);
-
-    contributionData.contributions = contributionData.contributions.map(contrib => ({
-        ...contrib,
-        adaptedColor: contributionColors[contrib.level] || contributionColors[0]
-    }));
-
-    contributionData.colorScheme = contributionColors;
-
-    return contributionData;
-}
-
 function getHueFromColor(color) {
     let r, g, b;
 
@@ -410,49 +368,62 @@ function parseColorString(colorStr) {
     return null;
 }
 
-function generateContributionColors(baseHue, backgroundType, customColors) {
+function adaptContributionColorsToBackground(backgroundCSS, contributionData, customColors) {
+    if (!contributionData || !contributionData.contributions) return contributionData;
+
+    let colorScheme = {};
+
     if (customColors && typeof customColors === 'object') {
-        const colors = {};
-        let hasValidColors = false;
+        const fallbackColors = backgroundCSS ? getDefaultTransparentColors() : getGitHubGreenColors();
 
         for (let i = 0; i <= 4; i++) {
             if (customColors[i]) {
                 const parsedColor = parseColorString(customColors[i]);
                 if (parsedColor) {
-                    colors[i] = parsedColor;
-                    hasValidColors = true;
+                    colorScheme[i] = parsedColor;
+                } else {
+                    colorScheme[i] = fallbackColors[i];
                 }
+            } else {
+                colorScheme[i] = fallbackColors[i];
             }
         }
-
-        if (hasValidColors) {
-            const generated = generateContributionColors(baseHue, backgroundType, null);
-            for (let i = 0; i <= 4; i++) {
-                if (!colors[i]) {
-                    colors[i] = generated[i];
-                }
-            }
-            return colors;
-        }
+    }
+    else if (backgroundCSS) {
+        colorScheme = getDefaultTransparentColors();
+    }
+    else {
+        colorScheme = getGitHubGreenColors();
     }
 
-    if (backgroundType === 'dark') {
-        return [
-            `hsla(${baseHue}, 20%, 10%, 0.15)`,
-            `hsla(${baseHue}, 60%, 22%, 0.55)`,
-            `hsla(${baseHue}, 65%, 32%, 0.65)`,
-            `hsla(${baseHue}, 70%, 44%, 0.72)`,
-            `hsla(${baseHue}, 75%, 56%, 0.80)`,
-        ];
-    } else {
-        return [
-            `hsla(${baseHue}, 15%, 90%, 0.40)`,
-            `hsla(${baseHue}, 50%, 60%, 0.55)`,
-            `hsla(${baseHue}, 55%, 48%, 0.65)`,
-            `hsla(${baseHue}, 60%, 38%, 0.75)`,
-            `hsla(${baseHue}, 65%, 28%, 0.85)`,
-        ];
-    }
+    contributionData.colorScheme = colorScheme;
+
+    contributionData.contributions = contributionData.contributions.map(contrib => ({
+        ...contrib,
+        adaptedColor: colorScheme[contrib.level] || colorScheme[0]
+    }));
+
+    return contributionData;
+}
+
+function getGitHubGreenColors() {
+    return {
+        0: 'rgba(255, 255, 255, 0.06)',
+        1: 'rgba(14, 68, 41, 0.55)',
+        2: 'rgba(0, 109, 50, 0.65)',
+        3: 'rgba(38, 166, 65, 0.72)',
+        4: 'rgba(57, 211, 83, 0.80)'
+    };
+}
+
+function getDefaultTransparentColors() {
+    return {
+        0: 'rgba(255, 255, 255, 0.04)',
+        1: 'rgba(255, 255, 255, 0.10)',
+        2: 'rgba(255, 255, 255, 0.20)',
+        3: 'rgba(255, 255, 255, 0.35)',
+        4: 'rgba(255, 255, 255, 0.50)'
+    };
 }
 
 module.exports = async (req, res) => {

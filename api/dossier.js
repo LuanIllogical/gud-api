@@ -20,6 +20,18 @@ function parseGudConfig(readme) {
         config['background'] = backgroundMatch[1].trim();
     }
 
+    const levelColors = {};
+    for (let i = 0; i <= 4; i++) {
+        const colorMatch = block.match(new RegExp(`gud-level-color-${i}:\\s*([^;\\n]+)`));
+        if (colorMatch && colorMatch[1].trim()) {
+            levelColors[i] = colorMatch[1].trim();
+        }
+    }
+
+    if (Object.keys(levelColors).length > 0) {
+        config['level-colors'] = levelColors;
+    }
+
     return config;
 }
 
@@ -381,47 +393,71 @@ function getHueFromColor(color) {
     return hue;
 }
 
-function generateContributionColors(baseHue, backgroundType) {
+function parseColorString(colorStr) {
+    if (/^#([0-9a-f]{3}){1,2}$/i.test(colorStr)) {
+        return colorStr;
+    }
+
+    if (/^(rgb|hsl)a?\(/i.test(colorStr)) {
+        return colorStr;
+    }
+
+    const namedColors = ['white', 'black', 'red', 'green', 'blue', 'yellow', 'orange', 'purple', 'pink', 'brown', 'gray', 'grey'];
+    if (namedColors.includes(colorStr.toLowerCase())) {
+        return colorStr;
+    }
+
+    return null;
+}
+
+function generateContributionColors(baseHue, backgroundType, customColors) {
+    if (customColors && typeof customColors === 'object') {
+        const colors = {};
+        let hasValidColors = false;
+
+        for (let i = 0; i <= 4; i++) {
+            if (customColors[i]) {
+                const parsedColor = parseColorString(customColors[i]);
+                if (parsedColor) {
+                    colors[i] = parsedColor;
+                    hasValidColors = true;
+                }
+            }
+        }
+
+        if (hasValidColors) {
+            const generated = generateContributionColors(baseHue, backgroundType, null);
+            for (let i = 0; i <= 4; i++) {
+                if (!colors[i]) {
+                    colors[i] = generated[i];
+                }
+            }
+            return colors;
+        }
+    }
+
     if (backgroundType === 'dark') {
-        return {
-            fills: [
-                `hsla(${baseHue}, 20%, 10%, 0.15)`,
-                `hsla(${baseHue}, 60%, 22%, 0.55)`,
-                `hsla(${baseHue}, 65%, 32%, 0.65)`,
-                `hsla(${baseHue}, 70%, 44%, 0.72)`,
-                `hsla(${baseHue}, 75%, 56%, 0.80)`,
-            ],
-            borders: [
-                `hsla(${baseHue}, 20%, 30%, 0.18)`,
-                `hsla(${baseHue}, 65%, 40%, 0.70)`,
-                `hsla(${baseHue}, 70%, 52%, 0.80)`,
-                `hsla(${baseHue}, 75%, 62%, 0.85)`,
-                `hsla(${baseHue}, 80%, 72%, 0.90)`,
-            ]
-        };
+        return [
+            `hsla(${baseHue}, 20%, 10%, 0.15)`,
+            `hsla(${baseHue}, 60%, 22%, 0.55)`,
+            `hsla(${baseHue}, 65%, 32%, 0.65)`,
+            `hsla(${baseHue}, 70%, 44%, 0.72)`,
+            `hsla(${baseHue}, 75%, 56%, 0.80)`,
+        ];
     } else {
-        return {
-            fills: [
-                `hsla(${baseHue}, 15%, 90%, 0.40)`,
-                `hsla(${baseHue}, 50%, 60%, 0.55)`,
-                `hsla(${baseHue}, 55%, 48%, 0.65)`,
-                `hsla(${baseHue}, 60%, 38%, 0.75)`,
-                `hsla(${baseHue}, 65%, 28%, 0.85)`,
-            ],
-            borders: [
-                `hsla(${baseHue}, 15%, 70%, 0.25)`,
-                `hsla(${baseHue}, 55%, 72%, 0.70)`,
-                `hsla(${baseHue}, 60%, 60%, 0.80)`,
-                `hsla(${baseHue}, 65%, 50%, 0.85)`,
-                `hsla(${baseHue}, 70%, 40%, 0.90)`,
-            ]
-        };
+        return [
+            `hsla(${baseHue}, 15%, 90%, 0.40)`,
+            `hsla(${baseHue}, 50%, 60%, 0.55)`,
+            `hsla(${baseHue}, 55%, 48%, 0.65)`,
+            `hsla(${baseHue}, 60%, 38%, 0.75)`,
+            `hsla(${baseHue}, 65%, 28%, 0.85)`,
+        ];
     }
 }
 
 module.exports = async (req, res) => {
     try {
-        res.setHeader("Access-Control-Allow-Origin", "https://luanillogical.github.io");
+        res.setHeader("Access-Control-Allow-Origin", "*"); // https://luanillogical.github.io
         res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
         res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
@@ -521,17 +557,18 @@ module.exports = async (req, res) => {
 
             if (gudConfig['repo-groups']) {
                 groupsConfig = extractGroupsFromConfig(gudConfig['repo-groups']);
-                console.log('Groups config extracted:', groupsConfig ? Object.keys(groupsConfig) : 'none');
             }
 
             if (gudConfig['background']) {
                 backgroundCSS = extractBackgroundFromConfig(gudConfig['background']);
-                console.log('Background CSS extracted:', backgroundCSS ? 'yes' : 'none');
+            }
+
+            if (gudConfig['level-colors']) {
+                customLevelColors = gudConfig['level-colors'];
             }
 
             const extracted = extractLanguageSections(readme);
             languageTexts = extracted.languageTexts;
-            console.log('Language texts found:', Object.keys(languageTexts));
 
             const { marked } = await import('marked');
             const createDOMPurify = await import('dompurify');
@@ -578,8 +615,8 @@ module.exports = async (req, res) => {
         try {
             contributionData = await fetchContributionData(user, process.env.GITHUB_TOKEN);
 
-            if (contributionData && backgroundCSS) {
-                contributionData = adaptContributionColorsToBackground(backgroundCSS, contributionData);
+            if (contributionData && (backgroundCSS || customLevelColors)) {
+                contributionData = adaptContributionColorsToBackground(backgroundCSS, contributionData, customLevelColors);
             }
         } catch (err) {
             console.error('Failed to fetch contributions:', err);
@@ -597,6 +634,7 @@ module.exports = async (req, res) => {
             readme: sanitizedHTML,
             languageTexts: languageTexts,
             backgroundCSS: backgroundCSS,
+            customLevelColors: customLevelColors,
             repos: {
                 grouped,
                 other

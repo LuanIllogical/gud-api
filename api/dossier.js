@@ -423,6 +423,7 @@ function getDefaultTransparentColors() {
 }
 
 async function findVideoFiles(username, path = '') {
+    let videoPreviews = {};
     const contentsRes = await fetch(
         `https://api.github.com/repos/${username}/${username}/contents/${path}`,
         {
@@ -447,6 +448,7 @@ async function findVideoFiles(username, path = '') {
             await findVideoFiles(username, item.path);
         }
     }
+    return viewPreviews;
 }
 
 module.exports = async (req, res) => {
@@ -529,6 +531,7 @@ module.exports = async (req, res) => {
         let sanitizedHTML = '';
         let backgroundCSS = null;
         let customLevelColors = null;
+        let videoPreviews = {};
 
         const readmeRes = await fetch(
             `https://api.github.com/repos/${user}/${user}/readme`,
@@ -543,7 +546,7 @@ module.exports = async (req, res) => {
 
         if (readmeRes.ok) {
             readme = await readmeRes.text();
-            await findVideoFiles(user);
+            videoPreviews = await findVideoFiles(user);
         }
 
         if (readme) {

@@ -5,31 +5,45 @@ function parseGudConfig(readme) {
 
     if (!readme) return config;
 
-    const configMatch = readme.match(/<!--\s*([\s\S]*?(?:gud-repo-groups|gud-background|gud-level-color|gud-custom-color)[\s\S]*?)-->/);
+    const configMatch = readme.match(/<!--\s*([\s\S]*?(?:gud-repo-groups|gud-background|gud-custom-detail-colors|gud-custom-language-colors|gud-custom-group-colors)[\s\S]*?)-->/);
     if (!configMatch) return config;
 
     const block = configMatch[1];
 
-    const repoGroupsMatch = block.match(/gud-repo-groups:\s*{\s*([\s\S]*?)\s*}\s*(?=gud-background:|gud-level-color-|gud-custom-color-|$)/);
+    const repoGroupsMatch = block.match(/gud-repo-groups:\s*{\s*([\s\S]*?)\s*}\s*(?=gud-background:|gud-custom-detail-colors:|gud-custom-language-colors:|gud-custom-group-colors:|$)/);
     if (repoGroupsMatch && repoGroupsMatch[1].trim()) {
         config['repo-groups'] = repoGroupsMatch[1].trim();
     }
 
-    const backgroundMatch = block.match(/gud-background:\s*{\s*([\s\S]*?)\s*}\s*(?=gud-level-color-|gud-custom-color-|$)/);
+    const backgroundMatch = block.match(/gud-background:\s*{\s*([\s\S]*?)\s*}\s*(?=gud-custom-detail-colors:|gud-custom-language-colors:|gud-custom-group-colors:|$)/);
     if (backgroundMatch && backgroundMatch[1].trim()) {
         config['background'] = backgroundMatch[1].trim();
     }
 
-    const levelColors = {};
-    for (let i = 0; i <= 4; i++) {
-        colorMatch = block.match(new RegExp(`gud-custom-color-${i}:\\s*([^;\\n]+)`));
-        if (colorMatch && colorMatch[1].trim()) {
-            levelColors[i] = colorMatch[1].trim();
-        }
+    const detailColorsMatch = block.match(/gud-custom-detail-colors:\s*{\s*([\s\S]*?)\s*}\s*(?=gud-custom-language-colors:|gud-custom-group-colors:|$)/);
+    if (detailColorsMatch && detailColorsMatch[1].trim()) {
+        const colors = detailColorsMatch[1].trim().split('\n')
+            .map(line => line.trim())
+            .filter(line => line && !line.startsWith('//'))
+            .map(line => line.replace(/,$/, '').trim());
+
+        config['detail-colors'] = {
+            0: colors[0] || 'rgba(255, 255, 255, 0.06)',
+            1: colors[1] || 'rgba(14, 68, 41, 0.55)',
+            2: colors[2] || 'rgba(0, 109, 50, 0.65)',
+            3: colors[3] || 'rgba(38, 166, 65, 0.72)',
+            4: colors[4] || 'rgba(57, 211, 83, 0.80)'
+        };
     }
 
-    if (Object.keys(levelColors).length > 0) {
-        config['level-colors'] = levelColors;
+    const languageColorsMatch = block.match(/gud-custom-language-colors:\s*{\s*([\s\S]*?)\s*}\s*(?=gud-custom-group-colors:|$)/);
+    if (languageColorsMatch && languageColorsMatch[1].trim()) {
+        config['language-colors'] = parseColorMap(languageColorsMatch[1].trim());
+    }
+
+    const groupColorsMatch = block.match(/gud-custom-group-colors:\s*{\s*([\s\S]*?)\s*}\s*(?=$)/);
+    if (groupColorsMatch && groupColorsMatch[1].trim()) {
+        config['group-colors'] = parseColorMap(groupColorsMatch[1].trim());
     }
 
     return config;
@@ -369,57 +383,28 @@ function parseColorString(colorStr) {
     return null;
 }
 
-function adaptContributionColorsToBackground(backgroundCSS, contributionData, customColors) {
-    if (!contributionData || !contributionData.contributions) return contributionData;
+function parseColorMap(colorMapStr) {
+    const colorMap = {};
+    const lines = colorMapStr.split('\n');
 
-    let colorScheme = {};
+    for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('//')) continue;
 
-    if (customColors && typeof customColors === 'object') {
-        const fallbackColors = backgroundCSS ? getDefaultTransparentColors() : getGitHubGreenColors();
+        const colonIndex = trimmed.indexOf(':');
+        if (colonIndex === -1) continue;
 
-        for (let i = 0; i <= 4; i++) {
-            if (customColors[i]) {
-                const parsedColor = parseColorString(customColors[i]);
-                if (parsedColor) {
-                    colorScheme[i] = parsedColor;
-                } else {
-                    colorScheme[i] = fallbackColors[i];
-                }
-            } else {
-                colorScheme[i] = fallbackColors[i];
-            }
+        const key = trimmed.substring(0, colonIndex).trim();
+        let value = trimmed.substring(colonIndex + 1).trim();
+
+        value = value.replace(/^["']|["']$/g, '');
+
+        if (key && value) {
+            colorMap[key] = value;
         }
     }
-    else if (backgroundCSS) {
-        colorScheme = getDefaultTransparentColors();
-    }
-    else {
-        colorScheme = getGitHubGreenColors();
-    }
 
-    contributionData.colorScheme = colorScheme;
-
-    return contributionData;
-}
-
-function getGitHubGreenColors() {
-    return {
-        0: 'rgba(255, 255, 255, 0.06)',
-        1: 'rgba(14, 68, 41, 0.55)',
-        2: 'rgba(0, 109, 50, 0.65)',
-        3: 'rgba(38, 166, 65, 0.72)',
-        4: 'rgba(57, 211, 83, 0.80)'
-    };
-}
-
-function getDefaultTransparentColors() {
-    return {
-        0: 'rgba(255, 255, 255, 0.04)',
-        1: 'rgba(255, 255, 255, 0.08)',
-        2: 'rgba(255, 255, 255, 0.12)',
-        3: 'rgba(255, 255, 255, 0.16)',
-        4: 'rgba(255, 255, 255, 0.20)'
-    };
+    return colorMap;
 }
 
 async function findVideoFiles(username, path = '') {
@@ -453,7 +438,7 @@ async function findVideoFiles(username, path = '') {
 
 module.exports = async (req, res) => {
     try {
-        res.setHeader("Access-Control-Allow-Origin", "https://luanillogical.github.io");
+        res.setHeader("Access-Control-Allow-Origin", "*"); //https://luanillogical.github.io
         res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
         res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
@@ -526,11 +511,8 @@ module.exports = async (req, res) => {
         }
 
         let readme = null;
-        let groupsConfig = null;
         let languageTexts = {};
         let sanitizedHTML = '';
-        let backgroundCSS = null;
-        let customLevelColors = null;
         let videoPreviews = {};
 
         const readmeRes = await fetch(
@@ -551,18 +533,11 @@ module.exports = async (req, res) => {
 
         if (readme) {
             const gudConfig = parseGudConfig(readme);
-
-            if (gudConfig['repo-groups']) {
-                groupsConfig = extractGroupsFromConfig(gudConfig['repo-groups']);
-            }
-
-            if (gudConfig['background']) {
-                backgroundCSS = extractBackgroundFromConfig(gudConfig['background']);
-            }
-
-            if (gudConfig['level-colors']) {
-                customLevelColors = gudConfig['level-colors'];
-            }
+            const groupsConfig = extractGroupsFromConfig(gudConfig['repo-groups']) || null;
+            const backgroundCSS = extractBackgroundFromConfig(gudConfig['background']) || null;
+            const customDetailColors = gudConfig['detail-colors'] || null;
+            const customLanguageColors = gudConfig['language-colors'] || null;
+            const customGroupColors = gudConfig['group-colors'] || null;
 
             const extracted = extractLanguageSections(readme);
             languageTexts = extracted.languageTexts;
@@ -608,18 +583,14 @@ module.exports = async (req, res) => {
         }
 
         const other = repos.filter(r => !used.has(r.name));
-
+        const contributionData = null;
         try {
             contributionData = await fetchContributionData(user, process.env.GITHUB_TOKEN);
-
-            if (contributionData && (backgroundCSS || customLevelColors)) {
-                contributionData = adaptContributionColorsToBackground(backgroundCSS, contributionData, customLevelColors);
-            }
         } catch (err) {
             console.error('Failed to fetch contributions:', err);
         }
 
-        let recentActivity = [];
+        const recentActivity = [];
         try {
             recentActivity = await fetchRecentActivity(user, process.env.GITHUB_TOKEN);
         } catch (err) {
@@ -636,6 +607,9 @@ module.exports = async (req, res) => {
                 other
             },
             contributions: contributionData,
+            customDetailColors: customDetailColors,
+            customLanguageColors: customLanguageColors,
+            customGroupColors: customGroupColors,
             recentActivity: recentActivity,
             videoPreviews: videoPreviews
         });

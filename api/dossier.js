@@ -312,77 +312,6 @@ function sanitizeEventPayload(type, payload) {
     return sanitized;
 }
 
-function getHueFromColor(color) {
-    let r, g, b;
-
-    if (color.startsWith('#')) {
-        const hex = color.substring(1);
-        if (hex.length === 3) {
-            r = parseInt(hex[0] + hex[0], 16);
-            g = parseInt(hex[1] + hex[1], 16);
-            b = parseInt(hex[2] + hex[2], 16);
-        } else if (hex.length === 6) {
-            r = parseInt(hex.substring(0, 2), 16);
-            g = parseInt(hex.substring(2, 4), 16);
-            b = parseInt(hex.substring(4, 6), 16);
-        } else {
-            return 142;
-        }
-    } else if (color.startsWith('rgb')) {
-        const matches = color.match(/\d+/g);
-        if (matches && matches.length >= 3) {
-            r = parseInt(matches[0]);
-            g = parseInt(matches[1]);
-            b = parseInt(matches[2]);
-        } else {
-            return 142;
-        }
-    } else {
-        return 142;
-    }
-
-    r /= 255;
-    g /= 255;
-    b /= 255;
-
-    const max = Math.max(r, g, b);
-    const min = Math.min(r, g, b);
-    let hue = 0;
-
-    if (max === min) {
-        hue = 0;
-    } else if (max === r) {
-        hue = 60 * ((g - b) / (max - min));
-    } else if (max === g) {
-        hue = 60 * (2 + (b - r) / (max - min));
-    } else {
-        hue = 60 * (4 + (r - g) / (max - min));
-    }
-
-    if (hue < 0) hue += 360;
-
-    return hue;
-}
-
-function parseColorString(colorStr) {
-    colorStr = colorStr.trim().replace(/^["']|["']$/g, '');
-
-    if (/^#([0-9a-f]{3}){1,2}$/i.test(colorStr)) {
-        return colorStr;
-    }
-
-    if (/^(rgb|hsl)a?\(/i.test(colorStr)) {
-        return colorStr;
-    }
-
-    const namedColors = ['white', 'black', 'red', 'green', 'blue', 'yellow', 'orange', 'purple', 'pink', 'brown', 'gray', 'grey'];
-    if (namedColors.includes(colorStr.toLowerCase())) {
-        return colorStr;
-    }
-
-    return null;
-}
-
 function parseColorMap(colorMapStr) {
     const colorMap = {};
     const lines = colorMapStr.split('\n');
@@ -529,7 +458,8 @@ module.exports = async (req, res) => {
             readme = await readmeRes.text();
             videoPreviews = await findVideoFiles(user);
         }
-
+        const grouped = {};
+        const used = new Set();
         if (readme) {
             const gudConfig = parseGudConfig(readme);
             const groupsConfig = extractGroupsFromConfig(gudConfig['repo-groups']) || null;
@@ -540,9 +470,6 @@ module.exports = async (req, res) => {
 
             const extracted = extractLanguageSections(readme);
             const languageTexts = extracted.languageTexts || null;
-
-            const grouped = {};
-            const used = new Set();
 
             if (groupsConfig) {
                 for (const [groupName, repoList] of Object.entries(groupsConfig)) {
@@ -580,8 +507,8 @@ module.exports = async (req, res) => {
 
             jsdom.window.close();
         }
-
         const other = repos.filter(r => !used.has(r.name));
+
         const contributionData = null;
         try {
             contributionData = await fetchContributionData(user, process.env.GITHUB_TOKEN);

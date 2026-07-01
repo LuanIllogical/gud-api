@@ -442,6 +442,14 @@ module.exports = async (req, res) => {
         let readme = null;
         let sanitizedHTML = '';
         let videoPreviews = {};
+        let groupsConfig = null;
+        let backgroundCSS = null;
+        let customDetailColors = null;
+        let chartLanguageColors = null;
+        let chartGroupColors = null;
+        let languageTexts = null;
+        const grouped = {};
+        const used = new Set();
 
         const readmeRes = await fetch(
             `https://api.github.com/repos/${user}/${user}/readme`,
@@ -458,18 +466,18 @@ module.exports = async (req, res) => {
             readme = await readmeRes.text();
             videoPreviews = await findVideoFiles(user);
         }
-        const grouped = {};
-        const used = new Set();
+
         if (readme) {
             const gudConfig = parseGudConfig(readme);
-            const groupsConfig = extractGroupsFromConfig(gudConfig['repo-groups']) || null;
-            const backgroundCSS = extractBackgroundFromConfig(gudConfig['background']) || null;
-            const customDetailColors = gudConfig['detail-colors'] || null;
-            const chartLanguageColors = gudConfig['language-colors'] || null;
-            const chartGroupColors = gudConfig['group-colors'] || null;
+
+            groupsConfig = extractGroupsFromConfig(gudConfig['repo-groups']) || null;
+            backgroundCSS = extractBackgroundFromConfig(gudConfig['background']) || null;
+            customDetailColors = gudConfig['detail-colors'] || null;
+            chartLanguageColors = gudConfig['language-colors'] || null;
+            chartGroupColors = gudConfig['group-colors'] || null;
 
             const extracted = extractLanguageSections(readme);
-            const languageTexts = extracted.languageTexts || null;
+            languageTexts = extracted.languageTexts || null;
 
             if (groupsConfig) {
                 for (const [groupName, repoList] of Object.entries(groupsConfig)) {

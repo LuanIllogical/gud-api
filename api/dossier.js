@@ -5,22 +5,22 @@ function parseGudConfig(readme) {
 
     if (!readme) return config;
 
-    const configMatch = readme.match(/<!--\s*([\s\S]*?(?:gud-repo-groups|gud-background|gud-custom-detail-colors|gud-chart-language-colors|gud-chart-group-colors)[\s\S]*?)-->/);
+    const configMatch = readme.match(/<!--\s*([\s\S]*?(?:gud-repo-groups|gud-background|gud-detail-colors|gud-chart-language-colors|gud-chart-group-colors)[\s\S]*?)-->/);
     if (!configMatch) return config;
 
     const block = configMatch[1];
 
-    const repoGroupsMatch = block.match(/gud-repo-groups:\s*{\s*([\s\S]*?)\s*}\s*(?=gud-background:|gud-custom-detail-colors:|gud-chart-language-colors:|gud-chart-group-colors:|$)/);
+    const repoGroupsMatch = block.match(/gud-repo-groups:\s*{\s*([\s\S]*?)\s*}\s*(?=gud-background:|gud-detail-colors:|gud-chart-language-colors:|gud-chart-group-colors:|$)/);
     if (repoGroupsMatch && repoGroupsMatch[1].trim()) {
         config['repo-groups'] = repoGroupsMatch[1].trim();
     }
 
-    const backgroundMatch = block.match(/gud-background:\s*{\s*([\s\S]*?)\s*}\s*(?=gud-custom-detail-colors:|gud-chart-language-colors:|gud-chart-group-colors:|$)/);
+    const backgroundMatch = block.match(/gud-background:\s*{\s*([\s\S]*?)\s*}\s*(?=gud-detail-colors:|gud-chart-language-colors:|gud-chart-group-colors:|$)/);
     if (backgroundMatch && backgroundMatch[1].trim()) {
         config['background'] = backgroundMatch[1].trim();
     }
 
-    const detailColorsMatch = block.match(/gud-custom-detail-colors:\s*{\s*([\s\S]*?)\s*}\s*(?=gud-chart-language-colors:|gud-chart-group-colors:|$)/);
+    const detailColorsMatch = block.match(/gud-detail-colors:\s*{\s*([\s\S]*?)\s*}\s*(?=gud-chart-language-colors:|gud-chart-group-colors:|$)/);
     if (detailColorsMatch && detailColorsMatch[1].trim()) {
         const colors = detailColorsMatch[1].trim().split('\n')
             .map(line => line.trim())
@@ -130,8 +130,6 @@ function extractLanguageSections(readme) {
     }
 
     cleanReadme = cleanReadme.replace(/\n\s*\n/g, '\n').trim();
-
-    console.log('Found languages:', Object.keys(languageTexts));
 
     return {
         languageTexts: languageTexts,

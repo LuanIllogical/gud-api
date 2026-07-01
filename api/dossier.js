@@ -5,22 +5,22 @@ function parseGudConfig(readme) {
 
     if (!readme) return config;
 
-    const configMatch = readme.match(/<!--\s*([\s\S]*?(?:gud-repo-groups|gud-background|gud-custom-detail-colors|gud-custom-language-colors|gud-custom-group-colors)[\s\S]*?)-->/);
+    const configMatch = readme.match(/<!--\s*([\s\S]*?(?:gud-repo-groups|gud-background|gud-custom-detail-colors|gud-chart-language-colors|gud-chart-group-colors)[\s\S]*?)-->/);
     if (!configMatch) return config;
 
     const block = configMatch[1];
 
-    const repoGroupsMatch = block.match(/gud-repo-groups:\s*{\s*([\s\S]*?)\s*}\s*(?=gud-background:|gud-custom-detail-colors:|gud-custom-language-colors:|gud-custom-group-colors:|$)/);
+    const repoGroupsMatch = block.match(/gud-repo-groups:\s*{\s*([\s\S]*?)\s*}\s*(?=gud-background:|gud-custom-detail-colors:|gud-chart-language-colors:|gud-chart-group-colors:|$)/);
     if (repoGroupsMatch && repoGroupsMatch[1].trim()) {
         config['repo-groups'] = repoGroupsMatch[1].trim();
     }
 
-    const backgroundMatch = block.match(/gud-background:\s*{\s*([\s\S]*?)\s*}\s*(?=gud-custom-detail-colors:|gud-custom-language-colors:|gud-custom-group-colors:|$)/);
+    const backgroundMatch = block.match(/gud-background:\s*{\s*([\s\S]*?)\s*}\s*(?=gud-custom-detail-colors:|gud-chart-language-colors:|gud-chart-group-colors:|$)/);
     if (backgroundMatch && backgroundMatch[1].trim()) {
         config['background'] = backgroundMatch[1].trim();
     }
 
-    const detailColorsMatch = block.match(/gud-custom-detail-colors:\s*{\s*([\s\S]*?)\s*}\s*(?=gud-custom-language-colors:|gud-custom-group-colors:|$)/);
+    const detailColorsMatch = block.match(/gud-custom-detail-colors:\s*{\s*([\s\S]*?)\s*}\s*(?=gud-chart-language-colors:|gud-chart-group-colors:|$)/);
     if (detailColorsMatch && detailColorsMatch[1].trim()) {
         const colors = detailColorsMatch[1].trim().split('\n')
             .map(line => line.trim())
@@ -36,12 +36,12 @@ function parseGudConfig(readme) {
         };
     }
 
-    const languageColorsMatch = block.match(/gud-custom-language-colors:\s*{\s*([\s\S]*?)\s*}\s*(?=gud-custom-group-colors:|$)/);
+    const languageColorsMatch = block.match(/gud-chart-language-colors:\s*{\s*([\s\S]*?)\s*}\s*(?=gud-chart-group-colors:|$)/);
     if (languageColorsMatch && languageColorsMatch[1].trim()) {
         config['language-colors'] = parseColorMap(languageColorsMatch[1].trim());
     }
 
-    const groupColorsMatch = block.match(/gud-custom-group-colors:\s*{\s*([\s\S]*?)\s*}\s*(?=$)/);
+    const groupColorsMatch = block.match(/gud-chart-group-colors:\s*{\s*([\s\S]*?)\s*}\s*(?=$)/);
     if (groupColorsMatch && groupColorsMatch[1].trim()) {
         config['group-colors'] = parseColorMap(groupColorsMatch[1].trim());
     }
@@ -511,7 +511,6 @@ module.exports = async (req, res) => {
         }
 
         let readme = null;
-        let languageTexts = {};
         let sanitizedHTML = '';
         let videoPreviews = {};
 
@@ -536,11 +535,31 @@ module.exports = async (req, res) => {
             const groupsConfig = extractGroupsFromConfig(gudConfig['repo-groups']) || null;
             const backgroundCSS = extractBackgroundFromConfig(gudConfig['background']) || null;
             const customDetailColors = gudConfig['detail-colors'] || null;
-            const customLanguageColors = gudConfig['language-colors'] || null;
-            const customGroupColors = gudConfig['group-colors'] || null;
+            const chartLanguageColors = gudConfig['language-colors'] || null;
+            const chartGroupColors = gudConfig['group-colors'] || null;
 
             const extracted = extractLanguageSections(readme);
-            languageTexts = extracted.languageTexts;
+            const languageTexts = extracted.languageTexts || null;
+
+            const grouped = {};
+            const used = new Set();
+
+            if (groupsConfig) {
+                for (const [groupName, repoList] of Object.entries(groupsConfig)) {
+                    grouped[groupName] = [];
+
+                    for (const repoName of repoList) {
+                        const match = repos.find(
+                            r => normalize(r.name) === normalize(repoName)
+                        );
+
+                        if (match) {
+                            grouped[groupName].push(match);
+                            used.add(match.name);
+                        }
+                    }
+                }
+            }
 
             const { marked } = await import('marked');
             const createDOMPurify = await import('dompurify');
@@ -560,26 +579,6 @@ module.exports = async (req, res) => {
             sanitizedHTML = DOMPurify.sanitize(fullHTML);
 
             jsdom.window.close();
-        }
-
-        const grouped = {};
-        const used = new Set();
-
-        if (groupsConfig) {
-            for (const [groupName, repoList] of Object.entries(groupsConfig)) {
-                grouped[groupName] = [];
-
-                for (const repoName of repoList) {
-                    const match = repos.find(
-                        r => normalize(r.name) === normalize(repoName)
-                    );
-
-                    if (match) {
-                        grouped[groupName].push(match);
-                        used.add(match.name);
-                    }
-                }
-            }
         }
 
         const other = repos.filter(r => !used.has(r.name));
@@ -608,8 +607,8 @@ module.exports = async (req, res) => {
             },
             contributions: contributionData,
             customDetailColors: customDetailColors,
-            customLanguageColors: customLanguageColors,
-            customGroupColors: customGroupColors,
+            chartLanguageColors: chartLanguageColors,
+            chartGroupColors: chartGroupColors,
             recentActivity: recentActivity,
             videoPreviews: videoPreviews
         });

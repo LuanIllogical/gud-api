@@ -314,6 +314,26 @@ function parseColorMap(colorMapStr) {
     const colorMap = {};
     const lines = colorMapStr.split('\n');
 
+    let hasColon = false;
+    for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('//')) continue;
+        if (trimmed.includes(':')) {
+            hasColon = true;
+            break;
+        }
+    }
+
+    if (!hasColon) {
+        const colors = [];
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith('//')) continue;
+            colors.push(trimmed.replace(/,$/, '').trim());
+        }
+        return colors;
+    }
+
     for (const line of lines) {
         const trimmed = line.trim();
         if (!trimmed || trimmed.startsWith('//')) continue;
@@ -321,10 +341,13 @@ function parseColorMap(colorMapStr) {
         const colonIndex = trimmed.indexOf(':');
         if (colonIndex === -1) continue;
 
-        const key = trimmed.substring(0, colonIndex).trim();
+        let key = trimmed.substring(0, colonIndex).trim();
         let value = trimmed.substring(colonIndex + 1).trim();
 
+        key = key.replace(/^["']|["']$/g, '');
         value = value.replace(/^["']|["']$/g, '');
+
+        value = value.replace(/,$/, '').trim();
 
         if (key && value) {
             colorMap[key] = value;

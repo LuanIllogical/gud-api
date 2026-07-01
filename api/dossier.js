@@ -517,14 +517,14 @@ module.exports = async (req, res) => {
         }
         const other = repos.filter(r => !used.has(r.name));
 
-        const contributionData = null;
+        let contributionData = null;
         try {
             contributionData = await fetchContributionData(user, process.env.GITHUB_TOKEN);
         } catch (err) {
             console.error('Failed to fetch contributions:', err);
         }
 
-        const recentActivity = [];
+        let recentActivity = [];
         try {
             recentActivity = await fetchRecentActivity(user, process.env.GITHUB_TOKEN);
         } catch (err) {
